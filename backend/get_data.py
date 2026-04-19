@@ -2,7 +2,10 @@ import json
 import argparse
 import time
 import logging
-from retriver import scrape_importyeti, parse_with_gemini
+if __package__:
+    from .retriver import parse_with_gemini, scrape_importyeti
+else:
+    from retriver import parse_with_gemini, scrape_importyeti
 
 # Set up logging for CLI execution
 if __name__ == "__main__":

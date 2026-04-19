@@ -1,8 +1,14 @@
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.concurrency import run_in_threadpool
-from get_data import get_supply_chain_data
 import os
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
+
+if __package__:
+    from .get_data import get_supply_chain_data
+else:
+    # Running as `uvicorn main:app` with cwd = backend/
+    from get_data import get_supply_chain_data
 
 app = FastAPI(
     title="Synergy Supply Chain API",

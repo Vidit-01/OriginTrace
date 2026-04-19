@@ -1,0 +1,1 @@
+"""Synergy FastAPI backend package."""

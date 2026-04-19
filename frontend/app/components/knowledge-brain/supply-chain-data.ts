@@ -52,14 +52,21 @@ function hashUnit(id: string, salt: string): number {
   return (h >>> 0) / 2 ** 32;
 }
 
-/** Slight horizontal/vertical offset so the canvas feels less perfectly symmetric. */
-function organicOffset(id: string, tier: number): { dx: number; dy: number } {
+/**
+ * Slight horizontal/vertical jitter so layouts feel less rigid.
+ * `spread` scales jitter — use <1 for API-backed graphs so labels stay apart when spacing is wider.
+ */
+function organicOffset(
+  id: string,
+  tier: number,
+  spread = 1
+): { dx: number; dy: number } {
   const u = hashUnit(id, 'x');
   const v = hashUnit(id, 'y');
-  const wave = Math.sin(tier * 1.17 + u * 6.28) * 22;
+  const wave = Math.sin(tier * 1.17 + u * 6.28) * 22 * spread;
   return {
-    dx: (u - 0.5) * 82 + wave,
-    dy: (v - 0.5) * 38 + Math.cos(tier * 0.88) * 16,
+    dx: ((u - 0.5) * 82 + wave) * spread,
+    dy: ((v - 0.5) * 38 + Math.cos(tier * 0.88) * 16) * spread,
   };
 }
 
@@ -751,6 +758,7 @@ export function buildSupplyChainGraph(): {
         id: `e-${r.parentId}-${r.id}`,
         source: r.parentId,
         target: r.id,
+        type: 'straight',
         animated: false,
         style: { stroke: CYAN, strokeWidth: 1.9, opacity: 0.55 },
       });
@@ -761,9 +769,9 @@ export function buildSupplyChainGraph(): {
   for (const arr of children.values()) arr.sort((a, b) => a.localeCompare(b));
 
   const xMap = layoutTreeX(rootId, children);
-  /** Vertical / horizontal spacing between nodes (reads as stronger “repulsion”). */
-  const TIER_GAP_Y = 168;
-  const X_SCALE = 126;
+  /** Vertical / horizontal spacing — larger keeps sibling labels from colliding. */
+  const TIER_GAP_Y = 188;
+  const X_SCALE = 148;
 
   const nodes: Node<SupplyNodeData>[] = RAW.map((r) => {
     const { id, parentId, ...rest } = r;
@@ -838,6 +846,7 @@ export function transformBackendDataToGraph(data: BackendData): {
       id,
       source: be.Company1,
       target: be.Company2,
+      type: 'straight' as const,
       animated: false,
       style: { stroke: CYAN, strokeWidth: 1.15, opacity: 0.38 },
     };
@@ -853,13 +862,14 @@ export function transformBackendDataToGraph(data: BackendData): {
   for (const arr of children.values()) arr.sort((a, b) => a.localeCompare(b));
 
   const xMap = layoutTreeX(rootId, children);
-  const TIER_GAP_Y = 112;
-  const X_SCALE = 82;
+  /** Extra gaps for long company names + straight edges meeting at parent handles. */
+  const TIER_GAP_Y = 176;
+  const X_SCALE = 156;
 
   const nodes: Node<SupplyNodeData>[] = backendNodes.map((bn) => {
     const id = bn['Company Name'];
     const accent = tierAccent(bn.Tier);
-    const { dx, dy } = organicOffset(id, bn.Tier);
+    const { dx, dy } = organicOffset(id, bn.Tier, 0.42);
 
     return {
       id,
