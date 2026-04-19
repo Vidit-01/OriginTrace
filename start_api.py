@@ -1,7 +1,7 @@
 """
 Start the FastAPI server from the repository root (fixes "Could not import module main").
 
-Usage (from synergy/):
+Usage (from the repository root):
   python start_api.py
 
 Or:

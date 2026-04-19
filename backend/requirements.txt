@@ -1,4 +1,4 @@
-# Synergy API — install in a venv:  pip install -r requirements.txt
+# GLOBALTRACE API — install in a venv:  pip install -r requirements.txt
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 beautifulsoup4>=4.12.0

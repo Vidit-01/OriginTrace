@@ -1,11 +1,15 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import Mapbox, {
+  FullscreenControl,
+  GeolocateControl,
   Layer,
   Marker,
   NavigationControl,
+  ScaleControl,
   Source,
   type MapRef,
 } from 'react-map-gl/mapbox';
@@ -31,7 +35,8 @@ export type SupplyChainMapViewProps = {
   onSelectNode: (id: string) => void;
 };
 
-const MAP_STYLE = 'mapbox://styles/mapbox/dark-v11';
+/** Night navigation style — roads & land read clearly; pairs with fog + terrain. */
+const MAP_STYLE = 'mapbox://styles/mapbox/navigation-night-v1';
 
 function useMapToken(): string {
   return process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? '';
@@ -130,8 +135,8 @@ function SupplyChainMapViewInner({
         opacity = 0.06;
         lineWidth = 0.6;
       } else if (!active) {
-        opacity = 0.58;
-        lineWidth = 1.45;
+        opacity = 0.72;
+        lineWidth = 1.65;
       } else if (hiE?.has(e.id)) {
         opacity = 0.95;
         lineWidth = 3.4;
@@ -200,6 +205,31 @@ function SupplyChainMapViewInner({
     } catch {
       /* ignore */
     }
+
+    try {
+      if (!map.getSource('mapbox-dem')) {
+        map.addSource('mapbox-dem', {
+          type: 'raster-dem',
+          url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+          tileSize: 512,
+          maxzoom: 14,
+        });
+      }
+      map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.18 });
+    } catch {
+      /* terrain optional if style/token limits */
+    }
+
+    try {
+      map.setLight({
+        anchor: 'viewport',
+        color: '#dbeafe',
+        intensity: 0.45,
+        position: [1.8, 210, 45],
+      });
+    } catch {
+      /* ignore */
+    }
   }, [initialBounds, dynamicMaxZoom]);
 
   const sortedMarkers = useMemo(() => {
@@ -225,14 +255,29 @@ function SupplyChainMapViewInner({
     );
   }
 
+  const ctrlChrome: CSSProperties = {
+    backgroundColor: 'rgba(8, 11, 18, 0.94)',
+    borderRadius: '12px',
+    border: '1px solid rgba(255,255,255,0.12)',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.45)',
+  };
+
   return (
-    <div className="relative h-full w-full min-h-0 bg-[#06080c]">
+    <div className="synergy-map relative h-full w-full min-h-0 bg-[#06080c]">
       <Mapbox
         ref={mapRef}
         mapboxAccessToken={token}
         mapStyle={MAP_STYLE}
         attributionControl
         reuseMaps
+        projection="globe"
+        fog={{
+          color: 'rgb(12, 22, 42)',
+          'high-color': 'rgb(56, 128, 242)',
+          'horizon-blend': 0.12,
+          'space-color': 'rgb(6, 10, 22)',
+          'star-intensity': 0.1,
+        }}
         initialViewState={{
           bounds: initialBounds,
           fitBoundsOptions: {
@@ -241,12 +286,35 @@ function SupplyChainMapViewInner({
           },
         }}
         style={{ width: '100%', height: '100%' }}
-        dragRotate={false}
-        pitchWithRotate={false}
+        dragRotate
+        pitchWithRotate
+        maxPitch={72}
+        minPitch={0}
         onLoad={onMapLoad}
         onClick={() => onHoverNode(null)}
       >
-        <NavigationControl position="top-right" showCompass={false} />
+        <GeolocateControl
+          position="top-left"
+          trackUserLocation
+          style={{
+            ...ctrlChrome,
+            marginTop: '52px',
+            marginLeft: '12px',
+          }}
+        />
+        <ScaleControl
+          position="bottom-left"
+          unit="metric"
+          style={ctrlChrome}
+        />
+        <NavigationControl
+          position="bottom-right"
+          showCompass
+          showZoom
+          visualizePitch
+          style={ctrlChrome}
+        />
+        <FullscreenControl position="bottom-right" style={ctrlChrome} />
 
         <Source id="supply-edges" type="geojson" data={edgeGeoJson}>
           <Layer
@@ -340,7 +408,7 @@ function SupplyChainMapViewInner({
                     }}
                   />
                 </span>
-                <span className="mt-1 max-w-[120px] truncate rounded bg-black/55 px-1 py-0.5 text-[8px] font-semibold text-white/95 backdrop-blur-sm sm:max-w-[140px] sm:text-[9px]">
+                <span className="mt-1.5 max-w-[140px] truncate rounded-md border border-white/10 bg-black/65 px-1.5 py-1 text-[10px] font-semibold leading-tight text-white/95 shadow-sm backdrop-blur-sm sm:max-w-[170px] sm:text-[11px]">
                   {d.label}
                 </span>
               </button>

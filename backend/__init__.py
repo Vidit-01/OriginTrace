@@ -1,1 +1,1 @@
-"""Synergy FastAPI backend package."""
+"""GLOBALTRACE FastAPI backend package."""

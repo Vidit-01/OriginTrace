@@ -105,8 +105,9 @@ function FluidTrail({
     if (!path) return;
     const len = Math.max(path.getTotalLength(), 80);
 
-    const dashSeg = Math.max(8, len * 0.04);
-    const gap = Math.max(14, len * 0.06);
+    /** Short dashes + wide gaps keep motion reading as fine threads, never chunky. */
+    const dashSeg = Math.min(10, Math.max(3.5, len * 0.015));
+    const gap = Math.max(22, len * 0.072);
     path.setAttribute("stroke-dasharray", `${dashSeg} ${gap}`);
     path.setAttribute("stroke-dashoffset", "0");
 
@@ -117,8 +118,9 @@ function FluidTrail({
       ease: "none",
     });
 
-    const lo = trail.strokeOpacity * 0.62;
-    const hi = Math.min(0.5, trail.strokeOpacity * 1.25);
+    /** Narrow opacity swing so glow never reads as a thickening pulse. */
+    const lo = trail.strokeOpacity * 0.78;
+    const hi = Math.min(0.42, trail.strokeOpacity * 0.98);
     gsap.set(path, { opacity: lo });
     const breathe = gsap.to(path, {
       opacity: hi,
@@ -141,7 +143,7 @@ function FluidTrail({
       d={trail.d}
       fill="none"
       stroke={trail.color}
-      strokeWidth={1.1}
+      strokeWidth={0.55}
       strokeLinecap="round"
       filter={`url(#${filterId})`}
     />
@@ -160,7 +162,8 @@ export function GlobalTraceCoolTrails() {
     () =>
       map.getSVG({
         radius: 0.28,
-        color: "rgba(185,205,225,0.38)",
+        /** Muted mustard / dull gold — reads as yellow without blowing out contrast */
+        color: "rgba(188, 162, 72, 0.26)",
         shape: "circle",
         backgroundColor: "transparent",
       }),
@@ -200,8 +203,8 @@ export function GlobalTraceCoolTrails() {
         preserveAspectRatio="xMidYMid slice"
       >
         <defs>
-          <filter id={filterId} x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur stdDeviation="1.35" result="blur" />
+          <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.38" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />

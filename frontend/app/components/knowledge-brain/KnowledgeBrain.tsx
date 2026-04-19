@@ -23,7 +23,8 @@ import {
   useEdgesState,
   useNodesState,
 } from '@xyflow/react';
-import { Map as MapIcon, Network, Search, X } from 'lucide-react';
+import Link from 'next/link';
+import { Map as MapIcon, Network, Search, User, X } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import {
   ANCHOR_COMPANY_NAME,
@@ -98,14 +99,14 @@ const KnowledgeNode = memo(function KnowledgeNode({
           }}
         />
         <div
-          className={`relative flex ${size} shrink-0 items-center justify-center rounded-full border-[2.5px] bg-gradient-to-b from-zinc-100 to-zinc-200/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 ease-out motion-safe:group-hover:scale-[1.03] dark:from-[#181d28] dark:to-[#080a0e] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${ring}`}
+          className={`relative flex ${size} shrink-0 items-center justify-center rounded-full border-[3px] bg-gradient-to-b from-zinc-100 to-zinc-200/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 ease-out motion-safe:group-hover:scale-[1.02] dark:from-[#181d28] dark:to-[#080a0e] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${ring}`}
           style={{
             borderColor: pathGlow ? accent : selected ? accent : 'rgba(255,255,255,0.16)',
             boxShadow: pathGlow
-              ? `0 0 36px ${accent}aa, 0 0 14px ${accent}66, inset 0 0 22px ${accent}22`
+              ? `0 0 48px ${accent}aa, 0 0 18px ${accent}66, inset 0 0 28px ${accent}22`
               : selected
-                ? `0 0 28px ${accent}77, 0 0 10px ${accent}44, inset 0 0 16px ${accent}18`
-                : `0 0 20px ${accent}40, 0 4px 22px rgba(0,0,0,0.55)`,
+                ? `0 0 36px ${accent}77, 0 0 14px ${accent}44, inset 0 0 20px ${accent}18`
+                : `0 0 28px ${accent}40, 0 6px 28px rgba(0,0,0,0.55)`,
           }}
         >
           <div
@@ -269,7 +270,7 @@ function getGraphViewOptions(nodeCount: number): {
 } {
   const n = Math.max(1, nodeCount);
   const padding = Math.min(0.48, 0.1 + Math.min(n * 0.017, 0.34));
-  const minZoom = Math.max(0.005, Math.min(0.038, 0.032 - n * 0.00045));
+  const minZoom = Math.max(0.0035, Math.min(0.055, 0.045 - n * 0.00028));
   const maxZoom = Math.min(3.2, 1.28 + Math.min(n * 0.03, 1.45));
   return { padding, minZoom, maxZoom };
 }
@@ -638,7 +639,15 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
   }, [mainView, viewOpts.padding, viewOpts.minZoom, viewOpts.maxZoom]);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#06080c] font-sans text-white">
+    <div className="relative flex h-screen w-full overflow-hidden bg-[#06080c] font-sans text-white">
+      <Link
+        href="/user-dashboard"
+        className="pointer-events-auto absolute right-4 top-4 z-[60] flex items-center gap-2 rounded-xl border border-white/15 bg-[#0b0f18]/92 px-3.5 py-2 text-[13px] font-medium text-zinc-100 shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md transition hover:border-[#00E8FF]/35 hover:bg-[#00E8FF]/10 hover:text-white"
+      >
+        <User className="size-[18px] text-[#00E8FF]" strokeWidth={2} aria-hidden />
+        Profile
+      </Link>
+
       <main className="relative min-h-0 min-w-0 flex-1">
         {mainView === 'map' ? (
           <SupplyChainMapView
@@ -673,6 +682,7 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
             onEdgesChange={onEdgesChange}
             nodesDraggable
             nodesConnectable={false}
+            nodesFocusable
             elementsSelectable
             panOnDrag
             zoomOnScroll
@@ -707,9 +717,9 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
               queueMicrotask(() => {
                 rfRef.current?.fitView({
                   nodes: [{ id: node.id }],
-                  padding: Math.min(0.55, viewOpts.padding + 0.14),
+                  padding: Math.min(0.68, viewOpts.padding + 0.24),
                   duration: 520,
-                  maxZoom: Math.min(viewOpts.maxZoom * 0.42, 1.05),
+                  maxZoom: Math.min(viewOpts.maxZoom * 0.3, 0.82),
                   minZoom: viewOpts.minZoom,
                 });
               });
@@ -746,17 +756,17 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
             }}
           >
             <Background
-              color="#5c6b8a"
-              gap={22}
-              size={1.35}
+              color="#8ea3c8"
+              gap={44}
+              size={3.8}
               variant={BackgroundVariant.Dots}
-              className="opacity-90"
+              className="opacity-[0.98]"
             />
           </ReactFlow>
         )}
 
         <div className="pointer-events-none absolute inset-0 z-20 flex flex-col">
-          <div className="pointer-events-auto absolute right-3 top-3 flex items-center gap-2">
+          <div className="pointer-events-auto absolute left-3 top-3 flex items-center gap-2">
             <div className="flex w-fit gap-0.5 rounded-xl border border-white/[0.08] bg-[#0b0d12]/90 p-1 shadow-lg backdrop-blur-md">
               <button
                 type="button"
@@ -814,11 +824,14 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
         </div>
       </main>
 
-      <aside className="z-30 flex w-full max-w-[min(100vw,26rem)] shrink-0 flex-col border-l border-white/[0.06] bg-gradient-to-b from-[#090c12] to-[#06080c] shadow-[-16px_0_48px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-5 py-4">
-          <span className="sy-type-caption text-zinc-300">
-            Company overview
-          </span>
+      <aside className="font-sans z-30 mt-[20vh] flex h-[calc(100vh-20vh)] min-h-0 w-full max-w-[min(100vw,28rem)] shrink-0 flex-col border-l border-white/10 bg-[linear-gradient(165deg,rgba(12,16,24,0.97)_0%,rgba(6,8,12,0.99)_45%,#05070a_100%)] shadow-[-20px_0_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-6 py-5">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+              Company overview
+            </p>
+            <div className="mt-2 h-px w-12 rounded-full bg-gradient-to-r from-[#00E8FF]/80 to-transparent" />
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -828,64 +841,64 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
               setSelectedProductHsn(null);
               setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
             }}
-            className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-white"
+            className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 text-zinc-400 transition-colors hover:border-[#00E8FF]/25 hover:bg-[#00E8FF]/10 hover:text-white"
             aria-label="Clear graph selection"
           >
-            <X size={18} />
+            <X size={18} strokeWidth={2} />
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto px-5 py-6">
-          <section className="space-y-3 border-b border-white/[0.06] pb-6">
-            <p className="sy-type-caption text-zinc-500">Name & description</p>
-            <h2 className="sy-type-title-lg text-white">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-6">
+          <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              Name & description
+            </p>
+            <h2 className="font-melodrama mt-3 text-[1.35rem] font-medium leading-tight tracking-tight text-white">
               {overviewNode?.data.label ?? ANCHOR_COMPANY_NAME}
             </h2>
-            <p className="sy-type-body text-zinc-400">
+            <p className="mt-3 font-sans text-[15px] font-normal leading-relaxed text-zinc-400">
               {overviewNode?.data.about ??
                 `${PRODUCT_ANCHOR} — reconstructed from customs-scale trade slices and BOM-aware pruning.`}
             </p>
           </section>
 
-          <section className="space-y-2">
-            <h3 className="sy-type-ui font-semibold uppercase tracking-[0.12em] text-zinc-500">
+          <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
               Primary client
             </h3>
-            <p className="sy-type-body text-zinc-300">
+            <p className="mt-3 font-sans text-[15px] font-normal leading-relaxed text-zinc-300">
               {parentCompanyName ??
                 'Downstream OEM and fleet operators (illustrative end demand for assembled products).'}
             </p>
           </section>
 
-          <section className="space-y-2">
-            <h3 className="sy-type-ui font-semibold uppercase tracking-[0.12em] text-zinc-500">
+          <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
               Suppliers
             </h3>
             {tierOneSuppliers.length === 0 ? (
-              <p className="sy-type-body text-zinc-500">No direct suppliers in this graph.</p>
+              <p className="mt-3 font-sans text-[15px] text-zinc-500">No direct suppliers in this graph.</p>
             ) : (
-              <ul className="sy-type-body list-inside list-disc space-y-1.5 text-zinc-300 marker:text-[#00a8cc]">
+              <ul className="mt-3 list-inside list-disc space-y-2 font-sans text-[15px] leading-relaxed text-zinc-300 marker:text-[#00E8FF]/80">
                 {tierOneSuppliers.map((name) => (
-                  <li key={name} className="leading-relaxed">
-                    {name}
-                  </li>
+                  <li key={name}>{name}</li>
                 ))}
               </ul>
             )}
           </section>
 
-          <section className="space-y-4">
-            <div>
-              <h3 className="sy-type-title text-white">Products</h3>
-              <p className="sy-type-caption mt-1 text-zinc-500">
-                Tier-0 company HSN options from backend. Select one to highlight matching branches in graph/map.
+          <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+            <div className="space-y-1">
+              <h3 className="font-melodrama text-lg font-medium tracking-tight text-white">Products</h3>
+              <p className="font-sans text-[13px] font-normal leading-snug text-zinc-500">
+                Tier-0 HSN options from the API — select to highlight branches on the graph or map.
               </p>
             </div>
-            <ul className="flex flex-col gap-2">
+            <ul className="mt-4 flex flex-col gap-2.5">
               {productRows.length === 0 ? (
-                <li className="sy-type-body text-zinc-500">
-                  No HSN options received yet. Open the dashboard with a company name in the URL to load tier-0
-                  products from the API.
+                <li className="font-sans text-[14px] leading-relaxed text-zinc-500">
+                  No HSN options yet. Open the dashboard with{' '}
+                  <span className="font-medium text-zinc-400">?q=CompanyName</span> to load tier-0 products.
                 </li>
               ) : (
                 productRows.map((row) => {
@@ -909,16 +922,18 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
                             })
                           );
                         }}
-                        className={`flex w-full flex-col gap-0.5 rounded-xl border px-3.5 py-3 text-left transition-all ${
+                        className={`flex w-full flex-col gap-1 rounded-xl border px-4 py-3.5 text-left transition-all ${
                           active
-                            ? 'border-[#00E8FF]/40 bg-[#00E8FF]/12 shadow-[0_0_24px_-8px_rgba(0,232,255,0.55)]'
-                            : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]'
+                            ? 'border-[#00E8FF]/45 bg-[#00E8FF]/10 shadow-[0_0_32px_-10px_rgba(0,232,255,0.45)]'
+                            : 'border-white/10 bg-black/20 hover:border-[#00E8FF]/20 hover:bg-white/[0.05]'
                         }`}
                       >
-                        <span className="font-mono sy-type-ui font-semibold text-[#00E8FF]">
+                        <span className="font-mono text-[13px] font-semibold text-[#00E8FF]">
                           {row.hsnDisplay}
                         </span>
-                        <span className="sy-type-body leading-snug text-zinc-300">{row.category}</span>
+                        <span className="font-sans text-[14px] font-normal leading-snug text-zinc-300">
+                          {row.category}
+                        </span>
                       </button>
                     </li>
                   );
@@ -927,10 +942,10 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
             </ul>
           </section>
 
-          <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
-            <p className="sy-type-caption leading-relaxed text-zinc-500">
-              Tip: Click a company on the graph or map to refresh this panel. Click the canvas to clear selection
-              and return the overview to the anchor. Zoom far out to release node focus.
+          <section className="rounded-2xl border border-dashed border-white/15 bg-black/25 px-4 py-3.5">
+            <p className="font-sans text-[12px] font-normal italic leading-relaxed text-zinc-500">
+              Tip: Click a node on the graph or map to inspect it. Click empty canvas to clear selection. Zoom out to
+              release path focus.
             </p>
           </section>
         </div>
