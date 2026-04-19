@@ -35,6 +35,8 @@ import {
   type SupplyNodeData,
   transformBackendDataToGraph,
 } from './supply-chain-data';
+import { BackendLoadingOverlay } from './backend-loading-overlay';
+import { RiskStatusBadge } from './risk-status-badge';
 
 const SupplyChainMapView = dynamic(() => import('./SupplyChainMapView'), {
   ssr: false,
@@ -291,6 +293,8 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
   /** Normalized HSN — highlights every route in the tree tied to that code. */
   const [selectedProductHsn, setSelectedProductHsn] = useState<string | null>(null);
   const [rootHsnOptions, setRootHsnOptions] = useState<string[]>([]);
+  /** When true, sidebar may show address/risk (user focused a node on graph or map) */
+  const [userPickedNode, setUserPickedNode] = useState(false);
   const rfRef = useRef<ReactFlowInstance<KnowledgeFlowNode, Edge> | null>(null);
 
   /** Sidebar + product scope: selected node, or graph root after clearing selection. */
@@ -340,6 +344,7 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
       setHoveredId(null);
       setSelectedProductHsn(null);
       setRootHsnOptions(hsnOptions);
+      setUserPickedNode(false);
 
       setTimeout(() => {
         rfRef.current?.fitView({
@@ -418,9 +423,9 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
 
       setNodes(nds => [...nds, ...filteredNodes]);
       setEdges(eds => [...eds, ...filteredEdges]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Expand failed');
     } finally {
       setIsLoading(false);
     }
@@ -551,15 +556,27 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
 
   const displayNodes = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const tokens = q.split(/\s+/).filter(Boolean);
     const glow = pathHighlight?.nodeIds;
     const focusLock = lockedPathSourceId !== null || selectedProductHsn !== null;
     return nodes.map((n) => {
       const d = n.data;
-      const hay = [d.label, d.country, d.hsnCode, d.commodity, d.about, d.parentLabel]
+      const hay = [
+        d.label,
+        d.country,
+        d.address,
+        d.hsnCode,
+        d.commodity,
+        d.about,
+        d.parentLabel,
+        d.riskAssessment?.financial_notes,
+        d.riskAssessment?.sdn_notes,
+        d.riskAssessment?.weather_text,
+      ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      const dim = q.length > 0 && !hay.includes(q);
+      const dim = tokens.length > 0 && !tokens.every((tok) => hay.includes(tok));
       const pathHighlightOn = !!(glow && glow.has(n.id));
       const offFocusPath =
         focusLock && glow && !glow.has(n.id);
@@ -639,8 +656,13 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
     };
   }, [mainView, viewOpts.padding, viewOpts.minZoom, viewOpts.maxZoom]);
 
+  const overviewRisk = overviewNode?.data.riskAssessment;
+  /** Address/risk blocks only after user selects a node (not default root focus) */
+  const showSelectedEnrichment = userPickedNode && selectedId !== null;
+
   return (
     <div className="relative flex h-screen w-full overflow-hidden bg-[#06080c] font-sans text-white">
+      <BackendLoadingOverlay open={isLoading} />
       <Link
         href="/user-dashboard"
         className="pointer-events-auto absolute right-4 top-4 z-[60] flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/85 px-3.5 py-2 text-[13px] font-medium text-zinc-200 shadow-lg backdrop-blur-md transition hover:border-white/15 hover:bg-zinc-900/90 hover:text-white"
@@ -661,10 +683,19 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
             pathHighlight={pathHighlight}
             onHoverNode={setHoveredId}
             onSelectNode={(id) => {
+              setUserPickedNode(true);
               setSelectedProductHsn(null);
               setLockedPathSourceId(id);
               setSelectedId(id);
               setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === id })));
+            }}
+            onMapBackgroundClick={() => {
+              setUserPickedNode(false);
+              setLockedPathSourceId(null);
+              setHoveredId(null);
+              setSelectedProductHsn(null);
+              setSelectedId(null);
+              setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
             }}
           />
         ) : (
@@ -695,6 +726,7 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
             onNodeMouseEnter={(_, n) => setHoveredId(n.id)}
             onNodeMouseLeave={() => setHoveredId(null)}
             onPaneClick={() => {
+              setUserPickedNode(false);
               setLockedPathSourceId(null);
               setHoveredId(null);
               setSelectedId(null);
@@ -709,6 +741,7 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
               }
             }}
             onNodeClick={(_, node) => {
+              setUserPickedNode(true);
               setSelectedProductHsn(null);
               setLockedPathSourceId(node.id);
               setSelectedId(node.id);
@@ -766,8 +799,8 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
           </ReactFlow>
         )}
 
-        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col">
-          <div className="pointer-events-auto absolute left-3 top-3 z-[25] flex items-center gap-3">
+        <div className="pointer-events-none absolute inset-0 z-[90] flex flex-col">
+          <div className="pointer-events-auto absolute left-3 top-3 z-[95] flex items-center gap-3">
             <Link
               href="/"
               className="shrink-0 rounded-lg opacity-95 outline-none ring-offset-2 ring-offset-[#06080c] transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-[#00E8FF]/50"
@@ -814,14 +847,18 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
               </button>
             </div>
           </div>
-          <div className="pointer-events-auto absolute bottom-7 left-1/2 w-[min(100vw-2rem,28rem)] -translate-x-1/2">
-            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-zinc-950/90 px-4 py-2.5 shadow-lg backdrop-blur-md transition-colors focus-within:border-white/15">
+          <div className="pointer-events-auto absolute bottom-7 left-1/2 z-[100] w-[min(100vw-2rem,28rem)] -translate-x-1/2">
+            <div
+              className="flex items-center gap-3 rounded-xl border border-white/10 bg-zinc-950/90 px-4 py-2.5 shadow-lg backdrop-blur-md transition-colors focus-within:border-white/15"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
               <Search className="shrink-0 text-zinc-500" size={18} strokeWidth={2} />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Filter nodes by name, country, HSN, commodity…"
                 className="min-w-0 flex-1 border-none bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+                autoComplete="off"
               />
               {isLoading && (
                 <div className="flex items-center gap-1.5 px-2">
@@ -851,6 +888,7 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
           <button
             type="button"
             onClick={() => {
+              setUserPickedNode(false);
               setSelectedId(null);
               setLockedPathSourceId(null);
               setHoveredId(null);
@@ -869,14 +907,100 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
               Name & description
             </p>
-            <h2 className="font-melodrama mt-3 text-[1.35rem] font-medium leading-tight tracking-tight text-white">
-              {overviewNode?.data.label ?? ANCHOR_COMPANY_NAME}
-            </h2>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <h2 className="font-melodrama text-[1.35rem] font-medium leading-tight tracking-tight text-white">
+                {overviewNode?.data.label ?? ANCHOR_COMPANY_NAME}
+              </h2>
+              {showSelectedEnrichment ? (
+                <RiskStatusBadge combinedScore={overviewRisk?.combined_score} />
+              ) : null}
+            </div>
             <p className="mt-3 font-sans text-[15px] font-normal leading-relaxed text-zinc-400">
               {overviewNode?.data.about ??
                 `${PRODUCT_ANCHOR} — reconstructed from customs-scale trade slices and BOM-aware pruning.`}
             </p>
           </section>
+
+          {showSelectedEnrichment && overviewNode?.data.address ? (
+            <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                Address
+              </h3>
+              <p className="mt-3 font-sans text-[14px] font-normal leading-relaxed text-zinc-300">
+                {overviewNode.data.address}
+              </p>
+            </section>
+          ) : null}
+
+          {showSelectedEnrichment && overviewRisk ? (
+            <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                Risk detail
+              </h3>
+              <dl className="mt-4 grid gap-3 font-sans text-[13px] text-zinc-300 sm:grid-cols-2">
+                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-3 py-2">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Combined
+                  </dt>
+                  <dd className="mt-1 font-mono tabular-nums text-zinc-100">
+                    {overviewRisk.combined_score ?? '—'}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-3 py-2">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    SDN / sanctions
+                  </dt>
+                  <dd className="mt-1 font-mono tabular-nums text-zinc-100">
+                    {overviewRisk.sdn_score ?? '—'}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-3 py-2">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Financial (SEC)
+                  </dt>
+                  <dd className="mt-1 font-mono tabular-nums text-zinc-100">
+                    {overviewRisk.financial_score ?? '—'}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-3 py-2">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    Weather / climate
+                  </dt>
+                  <dd className="mt-1 font-mono tabular-nums text-zinc-100">
+                    {overviewRisk.weather_score ?? '—'}
+                  </dd>
+                </div>
+              </dl>
+              {overviewRisk.sdn_notes ? (
+                <div className="mt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Sanctions notes
+                  </p>
+                  <p className="mt-2 font-sans text-[13px] leading-relaxed text-zinc-400">{overviewRisk.sdn_notes}</p>
+                </div>
+              ) : null}
+              {overviewRisk.financial_notes ? (
+                <div className="mt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Financial notes
+                  </p>
+                  <p className="mt-2 font-sans text-[13px] leading-relaxed text-zinc-400">
+                    {overviewRisk.financial_notes}
+                  </p>
+                </div>
+              ) : null}
+              {overviewRisk.weather_text ? (
+                <div className="mt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Weather context
+                  </p>
+                  <p className="mt-2 font-sans text-[13px] leading-relaxed text-zinc-400">
+                    {overviewRisk.weather_text}
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
             <h3 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
@@ -904,18 +1028,10 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
           </section>
 
           <section className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
-            <div className="space-y-1">
-              <h3 className="font-melodrama text-lg font-medium tracking-tight text-white">Products</h3>
-              <p className="font-sans text-[13px] font-normal leading-snug text-zinc-500">
-                Tier-0 HSN options from the API — select to highlight branches on the graph or map.
-              </p>
-            </div>
+            <h3 className="font-melodrama text-lg font-medium tracking-tight text-white">Products</h3>
             <ul className="mt-4 flex flex-col gap-2.5">
               {productRows.length === 0 ? (
-                <li className="font-sans text-[14px] leading-relaxed text-zinc-500">
-                  No HSN options yet. Open the dashboard with{' '}
-                  <span className="font-medium text-zinc-400">?q=CompanyName</span> to load tier-0 products.
-                </li>
+                <li className="font-sans text-[14px] leading-relaxed text-zinc-500">None loaded.</li>
               ) : (
                 productRows.map((row) => {
                   const active = selectedProductHsn === row.hsnNormalized;
@@ -958,13 +1074,6 @@ function BirdsEyesFlow({ initialQuery }: { initialQuery?: string }) {
                 })
               )}
             </ul>
-          </section>
-
-          <section className="rounded-2xl border border-dashed border-white/15 bg-black/25 px-4 py-3.5">
-            <p className="font-sans text-[12px] font-normal italic leading-relaxed text-zinc-500">
-              Tip: Click a node on the graph or map to inspect it. Click empty canvas to clear selection. Zoom out to
-              release path focus.
-            </p>
           </section>
         </div>
       </aside>

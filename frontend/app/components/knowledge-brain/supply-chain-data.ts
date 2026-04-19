@@ -8,9 +8,100 @@ export const ANCHOR_COMPANY_NAME = 'Tesla Inc.';
 export const ANCHOR_HSN = '8501.53';
 export const PRODUCT_ANCHOR = 'AC traction motors (multi-phase, >750W)';
 
+/** Risk signals from backend `Risk Assessment` (scores 0–100; higher = more concern). */
+export type RiskAssessment = {
+  combined_score?: number;
+  sdn_score?: number;
+  financial_score?: number;
+  weather_score?: number;
+  weather_text?: string;
+  financial_notes?: string;
+  sdn_notes?: string;
+};
+
+/** Traffic-light band derived from combined_score for UI badges. */
+export type RiskBand = 'low' | 'medium' | 'high' | 'unknown';
+
+export function riskBandFromCombinedScore(score: number | undefined): RiskBand {
+  if (score === undefined || Number.isNaN(score)) return 'unknown';
+  if (score < 34) return 'low';
+  if (score < 67) return 'medium';
+  return 'high';
+}
+
+export function riskBandLabel(band: RiskBand): string {
+  switch (band) {
+    case 'low':
+      return 'Low risk';
+    case 'medium':
+      return 'Elevated';
+    case 'high':
+      return 'High risk';
+    default:
+      return 'Risk N/A';
+  }
+}
+
+export function riskBandBadgeClass(band: RiskBand): string {
+  switch (band) {
+    case 'low':
+      return 'border-emerald-500/45 bg-emerald-500/15 text-emerald-200';
+    case 'medium':
+      return 'border-amber-500/45 bg-amber-500/15 text-amber-100';
+    case 'high':
+      return 'border-red-500/50 bg-red-500/15 text-red-100';
+    default:
+      return 'border-zinc-500/40 bg-zinc-800/80 text-zinc-400';
+  }
+}
+
+function numFromUnknown(v: unknown): number | undefined {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = Number.parseFloat(v.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function strFromUnknown(v: unknown): string | undefined {
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  return undefined;
+}
+
+/** Normalize backend `Risk Assessment` object (may be empty `{}`). */
+export function parseRiskAssessment(raw: unknown): RiskAssessment | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const combined = numFromUnknown(o.combined_score);
+  const sdn = numFromUnknown(o.sdn_score);
+  const fin = numFromUnknown(o.financial_score);
+  const wx = numFromUnknown(o.weather_score);
+  const hasAny =
+    combined !== undefined ||
+    sdn !== undefined ||
+    fin !== undefined ||
+    wx !== undefined ||
+    strFromUnknown(o.weather_text) ||
+    strFromUnknown(o.financial_notes) ||
+    strFromUnknown(o.sdn_notes);
+  if (!hasAny) return null;
+  return {
+    combined_score: combined,
+    sdn_score: sdn,
+    financial_score: fin,
+    weather_score: wx,
+    weather_text: strFromUnknown(o.weather_text),
+    financial_notes: strFromUnknown(o.financial_notes),
+    sdn_notes: strFromUnknown(o.sdn_notes),
+  };
+}
+
 export type SupplyNodeData = {
   label: string;
   country: string;
+  /** Street-level address from backend geocoding when available */
+  address?: string;
   latitude?: number;
   longitude?: number;
   hsnCode: string;
@@ -23,6 +114,7 @@ export type SupplyNodeData = {
   pathHighlight?: boolean;
   /** Parent company name for panel context */
   parentLabel?: string;
+  riskAssessment?: RiskAssessment | null;
   onExpand?: (nodeId: string, companyName: string) => void;
 };
 
@@ -804,11 +896,14 @@ export function buildSupplyChainGraph(): {
 export type BackendNode = {
   'Company Name': string;
   Country: string;
+  Address?: string;
   Latitude?: number | string;
   Longitude?: number | string;
   'Product Category': string;
   'Company Description': string;
   Tier: number;
+  /** Backend nested risk object */
+  'Risk Assessment'?: Record<string, unknown>;
 };
 
 export type BackendEdge = {
@@ -826,6 +921,17 @@ export type BackendData = {
   selected_anchor_hsn?: string;
   nodes: BackendNode[];
   edges: BackendEdge[];
+};
+
+/** One persisted graph from `company_graph_store.json` / GET /all_companies_data */
+export type StoredGraphRecord = {
+  company_key: string;
+  company_input: string;
+  selected_anchor_hsn?: string;
+  max_tier: number;
+  limit: number;
+  updated_at: string;
+  payload: BackendData;
 };
 
 export function transformBackendDataToGraph(data: BackendData): {
@@ -886,6 +992,11 @@ export function transformBackendDataToGraph(data: BackendData): {
       typeof bn.Latitude === 'number' ? bn.Latitude : Number(bn.Latitude);
     const lngNum =
       typeof bn.Longitude === 'number' ? bn.Longitude : Number(bn.Longitude);
+    const addr =
+      typeof bn.Address === 'string' && bn.Address.trim() && bn.Address !== 'N/A'
+        ? bn.Address.trim()
+        : undefined;
+    const riskAssessment = parseRiskAssessment(bn['Risk Assessment']);
 
     return {
       id,
@@ -898,6 +1009,7 @@ export function transformBackendDataToGraph(data: BackendData): {
       data: {
         label: bn['Company Name'],
         country: bn.Country || 'Unknown',
+        address: addr,
         latitude: Number.isFinite(latNum) ? latNum : undefined,
         longitude: Number.isFinite(lngNum) ? lngNum : undefined,
         hsnCode: nodeHsnMap.get(id) || 'N/A',
@@ -907,6 +1019,7 @@ export function transformBackendDataToGraph(data: BackendData): {
         accentColor: accent,
         isRoot: bn.Tier === 0,
         parentLabel: parentMap.get(id),
+        riskAssessment,
       },
     };
   });

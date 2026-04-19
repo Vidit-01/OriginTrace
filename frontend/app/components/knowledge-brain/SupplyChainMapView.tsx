@@ -34,6 +34,8 @@ export type SupplyChainMapViewProps = {
   pathHighlight: MapPathHighlight | null;
   onHoverNode: (id: string | null) => void;
   onSelectNode: (id: string) => void;
+  /** Fired when the user clicks the basemap (not a marker) */
+  onMapBackgroundClick?: () => void;
 };
 
 /** Night navigation style — roads & land read clearly; pairs with fog + terrain. */
@@ -124,6 +126,7 @@ function SupplyChainMapViewInner({
   pathHighlight,
   onHoverNode,
   onSelectNode,
+  onMapBackgroundClick,
 }: SupplyChainMapViewProps) {
   const token = useMapToken();
   const mapRef = useRef<MapRef>(null);
@@ -175,6 +178,7 @@ function SupplyChainMapViewInner({
 
   const edgeGeoJson = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const tokens = q.split(/\s+/).filter(Boolean);
     const active = !!hoveredId && pathHighlight;
     const hiE = pathHighlight?.edgeIds;
 
@@ -194,12 +198,22 @@ function SupplyChainMapViewInner({
 
       const n = nodes.find((x) => x.id === e.target);
       const hay = n
-        ? [n.data.label, n.data.country, n.data.hsnCode, n.data.commodity, n.data.about]
+        ? [
+            n.data.label,
+            n.data.country,
+            n.data.address,
+            n.data.hsnCode,
+            n.data.commodity,
+            n.data.about,
+            n.data.riskAssessment?.financial_notes,
+            n.data.riskAssessment?.sdn_notes,
+            n.data.riskAssessment?.weather_text,
+          ]
             .filter(Boolean)
             .join(' ')
             .toLowerCase()
         : '';
-      const searchDim = q.length > 0 && !hay.includes(q);
+      const searchDim = tokens.length > 0 && !tokens.every((tok) => hay.includes(tok));
 
       let opacity: number;
       let lineWidth: number;
@@ -365,7 +379,10 @@ function SupplyChainMapViewInner({
         maxPitch={72}
         minPitch={0}
         onLoad={onMapLoad}
-        onClick={() => onHoverNode(null)}
+        onClick={() => {
+          onHoverNode(null);
+          onMapBackgroundClick?.();
+        }}
       >
         <GeolocateControl
           position="top-left"
@@ -411,11 +428,22 @@ function SupplyChainMapViewInner({
           if (!p) return null;
           const d = n.data;
           const q = query.trim().toLowerCase();
-          const hay = [d.label, d.country, d.hsnCode, d.commodity, d.about]
+          const tokens = q.split(/\s+/).filter(Boolean);
+          const hay = [
+            d.label,
+            d.country,
+            d.address,
+            d.hsnCode,
+            d.commodity,
+            d.about,
+            d.riskAssessment?.financial_notes,
+            d.riskAssessment?.sdn_notes,
+            d.riskAssessment?.weather_text,
+          ]
             .filter(Boolean)
             .join(' ')
             .toLowerCase();
-          const searchDim = q.length > 0 && !hay.includes(q);
+          const searchDim = tokens.length > 0 && !tokens.every((tok) => hay.includes(tok));
 
           const pathOn = !!(pathHighlight?.nodeIds.has(n.id));
           const selected = n.id === selectedId;

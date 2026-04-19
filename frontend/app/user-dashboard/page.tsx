@@ -1,7 +1,11 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+
+import { AggregateRiskSummary } from '@/app/components/knowledge-brain/aggregate-risk-summary';
+import type { StoredGraphRecord } from '@/app/components/knowledge-brain/supply-chain-data';
 import {
   ArrowLeft,
   Briefcase,
@@ -99,9 +103,43 @@ const tierSupplierTotal = (company: HistoryCompany) =>
   company.tiers.reduce((acc, b) => acc + b.suppliers.length, 0);
 
 export default function UserDashboardPage() {
-  const companyCount = SEARCH_HISTORY.length;
-  const tierDepth = 3;
-  const mappedLinks = SEARCH_HISTORY.reduce((sum, c) => sum + tierSupplierTotal(c), 0);
+  const [cachedGraphs, setCachedGraphs] = useState<StoredGraphRecord[] | null>(null);
+
+  useEffect(() => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    let cancelled = false;
+    fetch(`${baseUrl}/all_companies_data`)
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json() as Promise<StoredGraphRecord[]>;
+      })
+      .then((data) => {
+        if (!cancelled) setCachedGraphs(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setCachedGraphs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const cachedStats = useMemo(() => {
+    if (!cachedGraphs?.length) return null;
+    let nodes = 0;
+    let edges = 0;
+    for (const rec of cachedGraphs) {
+      const p = rec.payload;
+      nodes += p?.nodes?.length ?? 0;
+      edges += p?.edges?.length ?? 0;
+    }
+    return { graphs: cachedGraphs.length, nodes, edges };
+  }, [cachedGraphs]);
+
+  const companyCount = cachedStats?.graphs ?? SEARCH_HISTORY.length;
+  const mappedLinks =
+    cachedStats?.edges ??
+    SEARCH_HISTORY.reduce((sum, c) => sum + tierSupplierTotal(c), 0);
 
   return (
     <div className="font-sans text-zinc-100">
@@ -153,64 +191,70 @@ export default function UserDashboardPage() {
             <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               <dt className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[var(--sy-tracking-overline)] text-zinc-500">
                 <Building2 className="size-3.5 text-[#00E8FF]/70" aria-hidden />
-                Companies saved
+                Cached graphs
               </dt>
               <dd className="font-melodrama mt-1 text-2xl font-medium tabular-nums text-white">{companyCount}</dd>
             </div>
             <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               <dt className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[var(--sy-tracking-overline)] text-zinc-500">
                 <Layers className="size-3.5 text-[#00E8FF]/70" aria-hidden />
-                Tier depth
+                Stored nodes
               </dt>
-              <dd className="font-melodrama mt-1 text-2xl font-medium tabular-nums text-white">{tierDepth} levels</dd>
+              <dd className="font-melodrama mt-1 text-2xl font-medium tabular-nums text-white">
+                {cachedStats?.nodes ?? '—'}
+              </dd>
             </div>
             <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               <dt className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[var(--sy-tracking-overline)] text-zinc-500">
                 <Package className="size-3.5 text-[#00E8FF]/70" aria-hidden />
-                Mapped supplier links
+                Stored edges
               </dt>
               <dd className="font-melodrama mt-1 text-2xl font-medium tabular-nums text-white">{mappedLinks}</dd>
             </div>
           </dl>
         </div>
 
-        <div className="mt-12 flex flex-col gap-12 lg:grid lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] lg:items-start lg:gap-14">
-          <aside className="lg:sticky lg:top-[4.5rem]">
-            <div className="relative overflow-hidden rounded-2xl border border-white/[0.1] bg-[linear-gradient(155deg,rgba(16,22,36,0.65),rgba(6,9,14,0.92))] p-6 shadow-[0_24px_80px_-32px_rgba(0,232,255,0.2)]">
-              <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full bg-[#00E8FF]/[0.07] blur-2xl" />
-              <div className="relative flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left">
-                <div
-                  className="flex size-[92px] shrink-0 items-center justify-center rounded-2xl border border-[#00E8FF]/30 bg-[linear-gradient(165deg,rgba(18,26,42,0.95),rgba(8,11,18,0.98))] shadow-[0_0_40px_-8px_rgba(0,232,255,0.35)]"
-                  aria-hidden
-                >
-                  <User className="size-10 text-[#00E8FF]/90" strokeWidth={1.5} />
+        <div className="mt-12 grid gap-10 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] lg:items-start lg:gap-14">
+          <div className="flex min-w-0 flex-col gap-10">
+            <aside>
+              <div className="relative overflow-hidden rounded-2xl border border-white/[0.1] bg-[linear-gradient(155deg,rgba(16,22,36,0.65),rgba(6,9,14,0.92))] p-6 shadow-[0_24px_80px_-32px_rgba(0,232,255,0.2)]">
+                <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full bg-[#00E8FF]/[0.07] blur-2xl" />
+                <div className="relative flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left">
+                  <div
+                    className="flex size-[92px] shrink-0 items-center justify-center rounded-2xl border border-[#00E8FF]/30 bg-[linear-gradient(165deg,rgba(18,26,42,0.95),rgba(8,11,18,0.98))] shadow-[0_0_40px_-8px_rgba(0,232,255,0.35)]"
+                    aria-hidden
+                  >
+                    <User className="size-10 text-[#00E8FF]/90" strokeWidth={1.5} />
+                  </div>
+                  <div className="mt-6 min-w-0 sm:ml-5 sm:mt-0">
+                    <h2 className="font-melodrama text-[length:var(--sy-text-title-lg)] font-medium tracking-[var(--sy-tracking-tight)] text-white">
+                      {DEMO_PROFILE.displayName}
+                    </h2>
+                    <p className="mt-2 inline-flex rounded-full border border-[#00E8FF]/25 bg-[#00E8FF]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#00E8FF]/95">
+                      {DEMO_PROFILE.role}
+                    </p>
+                  </div>
                 </div>
-                <div className="mt-6 min-w-0 sm:ml-5 sm:mt-0">
-                  <h2 className="font-melodrama text-[length:var(--sy-text-title-lg)] font-medium tracking-[var(--sy-tracking-tight)] text-white">
-                    {DEMO_PROFILE.displayName}
-                  </h2>
-                  <p className="mt-2 inline-flex rounded-full border border-[#00E8FF]/25 bg-[#00E8FF]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#00E8FF]/95">
-                    {DEMO_PROFILE.role}
-                  </p>
-                </div>
-              </div>
 
-              <ul className="relative mt-6 space-y-3 border-t border-white/[0.06] pt-6 text-[length:var(--sy-text-body)] leading-[var(--sy-leading-relaxed)] text-zinc-400">
-                <li className="flex gap-3">
-                  <Briefcase className="mt-0.5 size-4 shrink-0 text-zinc-500" aria-hidden />
-                  <span>{DEMO_PROFILE.organization}</span>
-                </li>
-                <li className="flex gap-3">
-                  <Layers className="mt-0.5 size-4 shrink-0 text-zinc-500" aria-hidden />
-                  <span>{DEMO_PROFILE.focus}</span>
-                </li>
-                <li className="flex gap-3">
-                  <Clock className="mt-0.5 size-4 shrink-0 text-zinc-500" aria-hidden />
-                  <span>{DEMO_PROFILE.lastActiveNote}</span>
-                </li>
-              </ul>
-            </div>
-          </aside>
+                <ul className="relative mt-6 space-y-3 border-t border-white/[0.06] pt-6 text-[length:var(--sy-text-body)] leading-[var(--sy-leading-relaxed)] text-zinc-400">
+                  <li className="flex gap-3">
+                    <Briefcase className="mt-0.5 size-4 shrink-0 text-zinc-500" aria-hidden />
+                    <span>{DEMO_PROFILE.organization}</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <Layers className="mt-0.5 size-4 shrink-0 text-zinc-500" aria-hidden />
+                    <span>{DEMO_PROFILE.focus}</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <Clock className="mt-0.5 size-4 shrink-0 text-zinc-500" aria-hidden />
+                    <span>{DEMO_PROFILE.lastActiveNote}</span>
+                  </li>
+                </ul>
+              </div>
+            </aside>
+
+            <AggregateRiskSummary records={cachedGraphs} />
+          </div>
 
           <section className="min-w-0 flex-1">
             <div className="flex flex-col gap-2 border-b border-[#00E8FF]/20 pb-4 sm:flex-row sm:items-end sm:justify-between">
