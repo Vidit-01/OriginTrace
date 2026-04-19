@@ -111,6 +111,7 @@ def parse_with_gemini(html: str, company_name: str) -> dict:
       "focus_company": {{
         "name": "{company_name}",
         "country": "Country",
+        "address": "Full Street Address, City, Country",
         "product_category": "Main Category",
         "description": "Short description of what the company does"
       }},
@@ -119,6 +120,7 @@ def parse_with_gemini(html: str, company_name: str) -> dict:
           "supplier_node": {{
             "name": "Supplier Company Name",
             "country": "Country",
+            "address": "Full Street Address, City, Country",
             "product_category": "Main Category",
             "description": "Short description of what the supplier does"
           }},
@@ -245,6 +247,21 @@ def _extract_next_data(pp: dict, result: dict) -> bool:
 
 # ─── SEC EDGAR ────────────────────────────────────────────────────────────────
 
+def fetch_sec_filing_content(cik: str, acc_no: str, primary_doc: str) -> str:
+    """Fetches the actual text content of an SEC filing."""
+    try:
+        acc_no_clean = acc_no.replace("-", "")
+        # SEC Archives URL format: https://www.sec.gov/Archives/edgar/data/CIK/ACC_NO/DOC
+        url = f"https://www.sec.gov/Archives/edgar/data/{cik.lstrip('0')}/{acc_no_clean}/{primary_doc}"
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        # Cap at 50k chars to keep LLM context reasonable
+        return resp.text[:50000]
+    except Exception as e:
+        console.log(f"[yellow]SEC filing fetch failed:[/yellow] {e}")
+        return ""
+
+
 def sec_edgar_lookup(cik: str) -> dict:
     try:
         cik = cik.zfill(10)
@@ -255,19 +272,37 @@ def sec_edgar_lookup(cik: str) -> dict:
         resp.raise_for_status()
         data = resp.json()
         recent = data.get("filings", {}).get("recent", {})
+        
+        filings = []
+        forms = recent.get("form", [])
+        dates = recent.get("filingDate", [])
+        accessions = recent.get("accessionNumber", [])
+        docs = recent.get("primaryDocument", [])
+        
+        for i in range(len(forms)):
+            form = forms[i]
+            # Prioritize financial records
+            if form in ["10-K", "10-Q", "8-K", "20-F"]:
+                filings.append({
+                    "form": form,
+                    "date": dates[i],
+                    "accessionNumber": accessions[i],
+                    "primaryDocument": docs[i]
+                })
+            if len(filings) >= 10:
+                break
+        
+        addr = data.get("addresses", {}).get("mailing", {})
+        full_addr = f"{addr.get('street1', '')}, {addr.get('city', '')}, {addr.get('stateOrCountry', '')}"
+        
         return {
             "name": data.get("name"),
             "cik": cik,
             "sic_description": data.get("sicDescription"),
             "state_of_incorporation": data.get("stateOfIncorporation"),
+            "address": full_addr.strip(", "),
             "tickers": data.get("tickers", []),
-            "recent_filings": [
-                {"form": f, "date": d}
-                for f, d in zip(
-                    recent.get("form", [])[:5],
-                    recent.get("filingDate", [])[:5],
-                )
-            ],
+            "recent_filings": filings,
         }
     except Exception as e:
         console.log(f"[yellow]SEC EDGAR failed:[/yellow] {e}")

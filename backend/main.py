@@ -1,7 +1,5 @@
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.concurrency import run_in_threadpool
-from get_data import get_supply_chain_data, get_company_suppliers_slice
+from get_data import get_supply_chain_data, get_company_suppliers_slice, STORE_PATH
+import json
 import os
 from pathlib import Path
 from cache_manager import PersistentCache
@@ -11,10 +9,10 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
 if __package__:
-    from .get_data import get_supply_chain_data, get_company_suppliers_slice
+    from .get_data import get_supply_chain_data, get_company_suppliers_slice, STORE_PATH
 else:
     # Running as `uvicorn main:app` with cwd = backend/
-    from get_data import get_supply_chain_data, get_company_suppliers_slice
+    from get_data import get_supply_chain_data, get_company_suppliers_slice, STORE_PATH
 
 app = FastAPI(
     title="GLOBALTRACE Supply Chain API",
@@ -119,6 +117,21 @@ async def get_suppliers_slice(
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/all_companies_data")
+def get_all_companies_data():
+    """
+    Returns all cached company graph data for the aggregate dashboard.
+    """
+    if not STORE_PATH.exists():
+        return []
+    try:
+        with open(STORE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read store: {e}")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,17 @@
 import argparse
 import json
 import logging
+import pandas as pd
+import requests
 if __package__:
-    from .retriver import parse_with_gemini, scrape_importyeti
+    from .retriver import parse_with_gemini, scrape_importyeti, sec_edgar_lookup, fetch_sec_filing_content
 else:
-    from retriver import parse_with_gemini, scrape_importyeti
+    from retriver import (
+        parse_with_gemini,
+        scrape_importyeti,
+        sec_edgar_lookup,
+        fetch_sec_filing_content
+    )
 import os
 import re
 import time
@@ -14,7 +21,6 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from retriver import parse_with_gemini, scrape_importyeti
 try:
     from google import genai as google_genai
 except Exception:
@@ -29,6 +35,9 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 BOM_PATH = BASE_DIR / "bom_tree.json"
 STORE_PATH = BASE_DIR / "company_graph_store.json"
+CIK_PATH = BASE_DIR / "company_cik.csv"
+SDN_PATH = BASE_DIR / "flagdata" / "sdn_companies_only.csv"
+WEATHER_API_KEY = "72d38df530dc4fb694c54550261904"
 
 HSN_PATTERN = re.compile(r"\b(?:\d{4}(?:\.\d{1,2}(?:\.\d+)?)?|\d{6,10})\b")
 STORE_LOCK = Lock()
@@ -179,37 +188,39 @@ class BomTree:
         return any(hsn_prefix(v, 4) == child4 for v in valid)
 
 
-class CountryCoordinateResolver:
+class LocationResolver:
     def __init__(self):
         self._cache: dict[str, tuple[float, float]] = {}
 
-    def resolve(self, country: str | None) -> tuple[float, float]:
-        key = normalize_company_name(country or "Unknown")
+    def resolve(self, address: str | None, country: str | None) -> tuple[float, float]:
+        """Resolves a full address or country to coordinates using Gemini."""
+        query = address if (address and len(address) > 10) else country or "Unknown"
+        key = normalize_company_name(query)
         if key in self._cache:
             return self._cache[key]
 
-        lat_lng = self._resolve_with_llm(country or "Unknown")
+        lat_lng = self._resolve_with_llm(query)
         if lat_lng is None:
             lat_lng = self._resolve_fallback(country or "Unknown")
         self._cache[key] = lat_lng
         return lat_lng
 
-    def _resolve_with_llm(self, country: str) -> tuple[float, float] | None:
+    def _resolve_with_llm(self, query: str) -> tuple[float, float] | None:
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key or not google_genai:
             return None
 
         prompt = (
-            "Return only JSON with keys latitude and longitude for this country-level location. "
-            "Approximate country centroid is fine. "
-            f"Country: {country}\n"
+            "Return only JSON with keys latitude and longitude for this location. "
+            "Be as specific as possible if a street address is provided. "
+            f"Location: {query}\n"
             '{"latitude": <float>, "longitude": <float>}'
         )
 
         try:
             client = google_genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-2.0-flash",
                 contents=prompt,
                 config={"response_mime_type": "application/json"},
             )
@@ -227,6 +238,129 @@ class CountryCoordinateResolver:
         if key in COUNTRY_COORD_FALLBACK:
             return COUNTRY_COORD_FALLBACK[key]
         return COUNTRY_COORD_FALLBACK["unknown"]
+
+
+class RiskAssessor:
+    def __init__(self):
+        self._sdn_df = None
+        self._cik_df = None
+
+    def _load_data(self):
+        if self._sdn_df is None:
+            try:
+                self._sdn_df = pd.read_csv(SDN_PATH)
+            except Exception as e:
+                logger.error("Failed to load SDN list: %s", e)
+                self._sdn_df = pd.DataFrame(columns=["Company Name"])
+        if self._cik_df is None:
+            try:
+                self._cik_df = pd.read_csv(CIK_PATH)
+            except Exception as e:
+                logger.error("Failed to load CIK map: %s", e)
+                self._cik_df = pd.DataFrame(columns=["company_name", "cik"])
+
+    def get_risk_scores(self, company_name: str, lat: float, lng: float) -> dict[str, Any]:
+        self._load_data()
+        
+        sdn_res = self._check_sdn(company_name)
+        sec_res = self._check_financials(company_name)
+        weather_res = self._check_weather(lat, lng)
+        
+        scores = {
+            "sdn_score": sdn_res["score"],
+            "financial_score": sec_res["score"],
+            "weather_score": weather_res["score"],
+            "weather_text": weather_res["text"],
+            "financial_notes": sec_res["notes"],
+            "sdn_notes": sdn_res["notes"]
+        }
+        
+        scores["combined_score"] = round((scores["sdn_score"] + scores["financial_score"] + scores["weather_score"]) / 3, 1)
+        return scores
+
+    def _check_sdn(self, company_name: str) -> dict:
+        self._load_data()
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        if not api_key or not google_genai:
+            return {"score": 0, "notes": "Fuzzy SDN check unavailable"}
+
+        # Optimization: subset for LLM
+        potential = self._sdn_df[self._sdn_df['Company Name'].str.contains(company_name[:4], case=False, na=False)]
+        list_sample = potential['Company Name'].unique().tolist()[:15]
+        
+        prompt = f"""
+        Is the company "{company_name}" on this list of sanctioned entities? 
+        List: {list_sample}
+        Return JSON with "sanctioned" (bool), "confidence" (0-100), and "notes" (string).
+        If matched, score is 100, else 0.
+        """
+        try:
+            client = google_genai.Client(api_key=api_key)
+            resp = client.models.generate_content(
+                model="gemini-2.0-flash", contents=prompt,
+                config={"response_mime_type": "application/json"}
+            )
+            data = json.loads(resp.text)
+            return {
+                "score": 100 if data.get("sanctioned") else 0,
+                "notes": data.get("notes", "No sanctions found.")
+            }
+        except:
+            return {"score": 0, "notes": "Fuzzy check failed."}
+
+    def _check_financials(self, company_name: str) -> dict:
+        self._load_data()
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        row = self._cik_df[self._cik_df['company_name'].str.lower() == company_name.lower()]
+        if row.empty or not api_key:
+            return {"score": 0, "notes": "No CIK or LLM available for financial assessment."}
+        
+        cik = str(row.iloc[0]['cik'])
+        meta = sec_edgar_lookup(cik)
+        filings = meta.get("recent_filings", [])[:3] # Analyze top 3 for speed/cost
+        
+        all_text = ""
+        for f in filings:
+            content = fetch_sec_filing_content(cik, f["accessionNumber"], f["primaryDocument"])
+            all_text += f"\n--- {f['form']} ({f['date']}) ---\n{content}\n"
+
+        prompt = f"""
+        Analyze these SEC filings for "{company_name}" to estimate financial risk (debt, profit, etc.).
+        Text: {all_text[:30000]}
+        Return JSON with "risk_score" (0-100) and "brief_assessment" (string).
+        """
+        try:
+            client = google_genai.Client(api_key=api_key)
+            resp = client.models.generate_content(
+                model="gemini-2.0-flash", contents=prompt,
+                config={"response_mime_type": "application/json"}
+            )
+            data = json.loads(resp.text)
+            return {"score": data.get("risk_score", 50), "notes": data.get("brief_assessment", "N/A")}
+        except:
+            return {"score": 0, "notes": "Financial analysis failed."}
+
+    def _check_weather(self, lat: float, lng: float) -> dict:
+        try:
+            url = f"https://api.weatherapi.com/v1/current.json?key={WEATHER_API_KEY}&q={lat},{lng}"
+            r = requests.get(url, timeout=10)
+            data = r.json()
+            cond = data.get("current", {}).get("condition", {}).get("text", "Unknown")
+            temp = data.get("current", {}).get("temp_c", "N/A")
+            
+            # Simple general risk assessment logic
+            risk = 0
+            if "storm" in cond.lower() or "typhoon" in cond.lower() or "hurricane" in cond.lower():
+                risk = 80
+            elif "rain" in cond.lower() or "snow" in cond.lower():
+                risk = 20
+            
+            return {
+                "score": risk,
+                "text": f"Current: {cond}, {temp}C. Climate risk level: {risk}/100"
+            }
+        except:
+            return {"score": 0, "text": "Weather data unavailable."}
 
 
 
@@ -252,7 +386,7 @@ class GraphStore:
     def lookup(self, company_name: str, anchor_hsn: str | None, max_tier: int, limit: int) -> dict[str, Any] | None:
         company_key = normalize_company_name(company_name)
         anchor_norm = normalize_hsn(anchor_hsn) if anchor_hsn else ""
-        coord_resolver = CountryCoordinateResolver()
+        coord_resolver = LocationResolver()
 
         with STORE_LOCK:
             records = self._load()
@@ -283,7 +417,7 @@ class GraphStore:
                 changed = False
                 for n in nodes:
                     if "Latitude" not in n or "Longitude" not in n:
-                        lat, lng = coord_resolver.resolve(n.get("Country") or "Unknown")
+                        lat, lng = coord_resolver.resolve(n.get("Address"), n.get("Country") or "Unknown")
                         n["Latitude"] = lat
                         n["Longitude"] = lng
                         changed = True
@@ -326,14 +460,14 @@ class GraphStore:
 
 
 class GraphBuilder:
-    def __init__(self, coord_resolver: CountryCoordinateResolver | None = None):
+    def __init__(self, coord_resolver: LocationResolver | None = None):
         self.top_products: list[str] = []
         self.hsn_options: list[str] = []
         self.nodes: list[dict[str, Any]] = []
         self.edges: list[dict[str, Any]] = []
         self._node_seq = 0
         self._name_counts: dict[str, int] = {}
-        self.coord_resolver = coord_resolver or CountryCoordinateResolver()
+        self.coord_resolver = coord_resolver or LocationResolver()
 
     def add_node(
         self,
@@ -341,10 +475,12 @@ class GraphBuilder:
         tier: int,
         *,
         country: str | None = None,
+        address: str | None = None,
         category: str | None = None,
         description: str | None = None,
         source: str | None = None,
         confidence: str | None = None,
+        risk_scores: dict[str, Any] | None = None,
     ) -> str:
         base = name.strip() or "Unknown Company"
         self._name_counts[base] = self._name_counts.get(base, 0) + 1
@@ -357,7 +493,7 @@ class GraphBuilder:
 
         self._node_seq += 1
         node_id = f"{slugify(base)}-{self._node_seq}"
-        lat, lng = self.coord_resolver.resolve(country or "Unknown")
+        lat, lng = self.coord_resolver.resolve(address, country or "Unknown")
 
         self.nodes.append(
             {
@@ -365,13 +501,15 @@ class GraphBuilder:
                 "Canonical Company Name": base,
                 "Node ID": node_id,
                 "Country": country or "Unknown",
+                "Address": address or "N/A",
                 "Latitude": lat,
                 "Longitude": lng,
                 "Product Category": category or "N/A",
-                "Company Description": description or "A supplier involved in the supply chain of relevant industries.",
+                "Company Description": description or "A supplier involved in the supply chain.",
                 "Tier": tier,
                 "Source": source or "unknown",
                 "Confidence": confidence or "low",
+                "Risk Assessment": risk_scores or {},
             }
         )
         return display_name
@@ -417,6 +555,7 @@ class BomRecursivePipeline:
     def __init__(self, bom_tree: BomTree):
         self.bom_tree = bom_tree
         self.scrape_cache: dict[str, dict[str, Any]] = {}
+        self._cik_df = None
 
     def _fetch_company_snapshot(self, company_name: str) -> dict[str, Any]:
         key = normalize_company_name(company_name)
@@ -429,6 +568,23 @@ class BomRecursivePipeline:
         except Exception as e:
             logger.warning("Scrape failed for %s. Falling back to LLM-only parse. Error: %s", company_name, e)
             data = parse_with_gemini("", company_name) or {}
+
+        # Fallback for address if unavailable on Yeti
+        fc = data.get("focus_company", {})
+        if not fc.get("address"):
+            if self._cik_df is None:
+                try:
+                    self._cik_df = pd.read_csv(CIK_PATH)
+                except:
+                    self._cik_df = pd.DataFrame()
+            
+            if not self._cik_df.empty:
+                row = self._cik_df[self._cik_df['company_name'].str.lower() == company_name.lower()]
+                if not row.empty:
+                    cik = str(row.iloc[0]['cik'])
+                    sec_meta = sec_edgar_lookup(cik)
+                    if sec_meta.get("address"):
+                        fc["address"] = sec_meta["address"]
 
         self.scrape_cache[key] = data
         return data
@@ -466,6 +622,7 @@ class BomRecursivePipeline:
         return {
             "name": supplier_name,
             "country": supplier.get("country") or "Unknown",
+            "address": supplier.get("address") or "",
             "category": supplier.get("product_category") or "N/A",
             "description": supplier.get("description") or "",
             "product": edge.get("product") or "Various",
@@ -562,8 +719,10 @@ class BomRecursivePipeline:
         anchor_hsn: str | None,
         max_tier: int,
         limit: int,
+        risk_assessor: RiskAssessor | None = None,
     ) -> dict[str, Any]:
         graph = GraphBuilder()
+        assessor = risk_assessor or RiskAssessor()
 
         root_snapshot = self._fetch_company_snapshot(company_name)
         graph.top_products = root_snapshot.get("top_products", []) or []
@@ -574,14 +733,22 @@ class BomRecursivePipeline:
             selected_anchor = graph.hsn_options[0] if graph.hsn_options else ""
 
         focus_company = root_snapshot.get("focus_company", {}) or {}
+        
+        # Resolve root coordinates and risks
+        root_addr = focus_company.get("address")
+        root_lat, root_lng = graph.coord_resolver.resolve(root_addr, focus_company.get("country"))
+        root_risks = assessor.get_risk_scores(company_name, root_lat, root_lng)
+
         root_display = graph.add_node(
             name=company_name,
             tier=0,
             country=focus_company.get("country") or "Unknown",
+            address=root_addr,
             category=focus_company.get("product_category") or "N/A",
             description=focus_company.get("description") or f"{company_name} root company.",
             source="user-input",
             confidence="anchor",
+            risk_scores=root_risks,
         )
 
         if not selected_anchor:
@@ -606,14 +773,22 @@ class BomRecursivePipeline:
 
             for cand in selected:
                 child_name = cand.get("name") or "Unknown Supplier"
+                child_addr = cand.get("address")
+                
+                # Resolve child coordinates and risks
+                child_lat, child_lng = graph.coord_resolver.resolve(child_addr, cand.get("country"))
+                child_risks = assessor.get_risk_scores(child_name, child_lat, child_lng)
+
                 child_display = graph.add_node(
                     name=child_name,
                     tier=tier,
                     country=cand.get("country") or "Unknown",
+                    address=child_addr,
                     category=cand.get("category") or "N/A",
                     description=cand.get("description") or "",
                     source=cand.get("source") or "unknown",
                     confidence=cand.get("confidence") or "low",
+                    risk_scores=child_risks,
                 )
 
                 child_hsn = normalize_hsn(cand.get("hsn") or "")
@@ -634,26 +809,27 @@ class BomRecursivePipeline:
         recurse(root_display, company_name, selected_anchor, tier=1)
         return graph.to_json(selected_anchor)
 
-
 # ---------------------- legacy fallback (keep tier0-1 stable) ----------------------
 class LegacyGlobalGraph:
     def __init__(self):
         self.top_products = []
         self.nodes = {}
         self.edges = []
-        self.coord_resolver = CountryCoordinateResolver()
+        self.coord_resolver = LocationResolver()
 
-    def add_node(self, name, tier, country=None, category=None, description=None):
+    def add_node(self, name, tier, country=None, address=None, category=None, description=None, risk_scores=None):
         if name not in self.nodes:
-            lat, lng = self.coord_resolver.resolve(country or "Unknown")
+            lat, lng = self.coord_resolver.resolve(address, country or "Unknown")
             self.nodes[name] = {
                 "Company Name": name,
                 "Country": country or "Unknown",
+                "Address": address or "N/A",
                 "Latitude": lat,
                 "Longitude": lng,
                 "Product Category": category or "N/A",
-                "Company Description": description or "A supplier involved in the supply chain of relevant industries.",
+                "Company Description": description or "A supplier involved in the supply chain.",
                 "Tier": tier,
+                "Risk Assessment": risk_scores or {},
             }
 
     def add_edge(self, source, target, product, description, hsn, route):
