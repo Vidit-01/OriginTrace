@@ -24,9 +24,13 @@ const item = {
   },
 };
 
+const SUBTITLE_FULL =
+  "Identify origin nodes, trace supply routes, and map raw material dependencies across the global grid.";
+
 export function GlobalTraceHero() {
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [subtitleShown, setSubtitleShown] = useState("");
   const badgeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,6 +46,56 @@ export function GlobalTraceHero() {
     });
     return () => {
       tween.kill();
+    };
+  }, []);
+
+  useEffect(() => {
+    let i = 0;
+    let phase: "type" | "pause1" | "del" | "pause2" = "type";
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const schedule = (fn: () => void, ms: number) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(fn, ms);
+    };
+
+    const typeMs = 36;
+    const deleteMs = 26;
+    const pauseAfterTypedMs = 2600;
+    const pauseBeforeRestartMs = 720;
+
+    const step = () => {
+      if (phase === "type") {
+        if (i < SUBTITLE_FULL.length) {
+          i += 1;
+          setSubtitleShown(SUBTITLE_FULL.slice(0, i));
+          schedule(step, typeMs);
+        } else {
+          phase = "pause1";
+          schedule(() => {
+            phase = "del";
+            step();
+          }, pauseAfterTypedMs);
+        }
+      } else if (phase === "del") {
+        if (i > 0) {
+          i -= 1;
+          setSubtitleShown(SUBTITLE_FULL.slice(0, i));
+          schedule(step, deleteMs);
+        } else {
+          phase = "pause2";
+          schedule(() => {
+            phase = "type";
+            step();
+          }, pauseBeforeRestartMs);
+        }
+      }
+    };
+
+    schedule(step, 480);
+
+    return () => {
+      clearTimeout(timeoutId);
     };
   }, []);
 
@@ -61,7 +115,7 @@ export function GlobalTraceHero() {
   return (
     <section className="relative z-10 flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center px-4 pb-24 pt-10 sm:px-6">
       <motion.div
-        className="mx-auto flex w-full max-w-3xl flex-col items-center text-center"
+        className="mx-auto flex w-full max-w-3xl flex-col items-center text-center font-sans"
         variants={container}
         initial="hidden"
         animate="show"
@@ -80,27 +134,28 @@ export function GlobalTraceHero() {
 
         <motion.p
           variants={item}
-          className="font-mono text-[0.65rem] uppercase tracking-[0.42em] text-[#00F2FF]/90"
-          style={{ fontFamily: "var(--font-landing-mono), ui-monospace" }}
+          className="font-sans text-[0.65rem] font-extralight italic uppercase tracking-[0.42em] text-[#00F2FF]/90"
         >
           by SYNERGY
         </motion.p>
 
         <motion.h1
           variants={item}
-          className="mt-5 text-[clamp(2.5rem,10vw,4rem)] font-normal leading-[1.02] tracking-[0.02em] text-white"
-          style={{ fontFamily: "var(--font-global-serif), ui-serif" }}
+          className="font-melodrama mt-4 text-[clamp(3.75rem,16vw,7rem)] font-bold leading-[0.98] tracking-[0.015em] text-white drop-shadow-[0_4px_48px_rgba(0,242,255,0.12)]"
         >
           GLOBALTRACE
         </motion.h1>
 
         <motion.p
           variants={item}
-          className="mt-8 max-w-2xl text-[0.65rem] font-medium uppercase leading-relaxed tracking-[0.28em] text-[#a0a0a0] sm:text-[0.7rem]"
-          style={{ fontFamily: "var(--font-landing-display), ui-sans-serif" }}
+          aria-label={SUBTITLE_FULL}
+          className="mt-8 min-h-[5.25rem] max-w-2xl text-[0.7rem] font-light uppercase leading-relaxed tracking-[0.26em] text-[#a8a8a8] sm:min-h-[4.5rem] sm:text-[0.78rem]"
         >
-          Identify origin nodes, trace supply routes, and map raw material
-          dependencies across the global grid.
+          {subtitleShown}
+          <span
+            className="ml-0.5 inline-block h-[1em] w-[0.08em] translate-y-[0.08em] bg-[#00F2FF]/75 align-middle motion-safe:animate-pulse"
+            aria-hidden
+          />
         </motion.p>
 
         <motion.div variants={item} className="mt-12 flex w-full max-w-xl flex-col gap-4">
@@ -108,29 +163,18 @@ export function GlobalTraceHero() {
             type="button"
             onClick={() => router.push("/dashboard")}
             className="w-full rounded-full border border-[#00F2FF]/35 bg-[rgba(8,12,22,0.85)] px-6 py-3.5 text-[0.8125rem] font-semibold uppercase tracking-[0.22em] text-[#00F2FF] shadow-[0_0_48px_-16px_rgba(0,242,255,0.35)] transition hover:border-[#00F2FF]/55 hover:bg-[#00F2FF]/10"
-            style={{ fontFamily: "var(--font-landing-mono), ui-monospace" }}
           >
             Continue with demo data
           </button>
 
-          <p
-            className="text-center text-[0.65rem] uppercase tracking-[0.28em] text-[#6b7280]"
-            style={{ fontFamily: "var(--font-landing-mono), ui-monospace" }}
-          >
+          <p className="text-center text-[0.65rem] font-medium uppercase tracking-[0.28em] text-[#6b7280]">
             Or trace a live company
           </p>
         </motion.div>
 
-        <motion.form
-          variants={item}
-          onSubmit={onSubmit}
-          className="mt-2 w-full max-w-xl"
-        >
+        <motion.form variants={item} onSubmit={onSubmit} className="mt-2 w-full max-w-xl">
           <div className="flex items-stretch rounded-full border border-[#00F2FF]/15 bg-[rgba(8,12,22,0.72)] py-1 pl-1 pr-1 shadow-[0_0_60px_-20px_rgba(0,242,255,0.25)] backdrop-blur-md">
-            <span
-              className="hidden shrink-0 items-center gap-3 border-r border-white/10 px-4 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-[#00F2FF] sm:flex"
-              style={{ fontFamily: "var(--font-landing-mono), ui-monospace" }}
-            >
+            <span className="hidden shrink-0 items-center gap-3 border-r border-white/10 px-4 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#00F2FF] sm:flex">
               Target ID
             </span>
             <input
@@ -138,8 +182,7 @@ export function GlobalTraceHero() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Enter company name"
-              className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm text-white/95 outline-none placeholder:text-[#6b7280] sm:px-5"
-              style={{ fontFamily: "var(--font-landing-display), ui-sans-serif" }}
+              className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm font-normal text-white/95 outline-none placeholder:text-[#6b7280] placeholder:italic sm:px-5"
             />
             <button
               type="submit"
@@ -149,9 +192,12 @@ export function GlobalTraceHero() {
               <Search className="size-5" strokeWidth={2} />
             </button>
           </div>
-          <p className="mt-4 text-center text-[0.65rem] tracking-wide text-[#6b7280]">
+          <p className="mt-4 text-center text-[0.65rem] font-normal tracking-wide text-[#6b7280]">
             Enter a company to load its chain from the API, or use{" "}
-            <Link href="/dashboard" className="text-[#00F2FF]/80 underline-offset-4 hover:underline">
+            <Link
+              href="/dashboard"
+              className="font-medium text-[#00F2FF]/80 underline-offset-4 hover:underline"
+            >
               demo data
             </Link>
             .

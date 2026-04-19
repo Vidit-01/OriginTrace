@@ -14,23 +14,23 @@ export function GlobalTraceHeader() {
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:h-[3.75rem] sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 outline-none">
           <span className="relative grid size-8 place-items-center rounded-full border border-[#00F2FF]/35 bg-[#0a1018] shadow-[0_0_24px_-6px_rgba(0,242,255,0.45)]">
-            <SynergyGlyph className="size-[18px] text-[#00F2FF]" />
+            <GlobalTraceGlyph className="size-[18px] text-[#00F2FF]" />
           </span>
-          <span className="text-[0.8125rem] font-semibold tracking-[0.18em] text-white">
-            SYNERGY
+          <span className="font-melodrama text-[0.875rem] font-medium tracking-[0.2em] text-white">
+            GLOBALTRACE
           </span>
         </Link>
 
         <nav className="flex items-center gap-6 sm:gap-8">
           <Link
             href="/docs"
-            className="hidden text-[0.8125rem] tracking-wide text-[#a0a0a0] transition hover:text-white sm:inline"
+            className="hidden font-sans text-[0.8125rem] font-medium tracking-wide text-[#a0a0a0] transition hover:text-white sm:inline"
           >
             Documentation
           </Link>
           <Link
             href="/api-docs"
-            className="hidden text-[0.8125rem] tracking-wide text-[#a0a0a0] transition hover:text-white sm:inline"
+            className="hidden font-sans text-[0.8125rem] font-medium tracking-wide text-[#a0a0a0] transition hover:text-white sm:inline"
           >
             API
           </Link>
@@ -40,7 +40,7 @@ export function GlobalTraceHeader() {
   );
 }
 
-function SynergyGlyph({ className }: { className?: string }) {
+function GlobalTraceGlyph({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden fill="none">
       <circle cx="16" cy="16" r="13" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" />

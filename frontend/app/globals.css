@@ -3,9 +3,25 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root {
+/* Melodrama — place variable font at public/fonts/Melodrama-Variable.woff2 (Fontshare / your licensed file). */
+@font-face {
+  font-family: "Melodrama";
+  src:
+    url("/fonts/Melodrama-Variable.woff2") format("woff2-variations"),
+    url("/fonts/Melodrama-Variable.woff2") format("woff2"),
+    url("/fonts/Melodrama.woff2") format("woff2");
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: swap;
+}
 
-  /* Synergy type scale — use with text-[length:var(--sy-text-*)] or utilities below */
+:root {
+  /* Display/titles — loaded via @font-face from public/fonts/Melodrama-Variable.woff2 */
+  --melodrama-family: "Melodrama", "Iowan Old Style", "Palatino Linotype", ui-serif, Georgia, serif;
+  /* Plus Jakarta Sans — loaded in app/layout.tsx (Google Fonts CSS2 variable axis). */
+  --font-plus-jakarta: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Type scale — use with text-[length:var(--sy-text-*)] or utilities below */
   --sy-text-display: clamp(2rem, 4.4vw, 2.75rem);
   --sy-text-title-lg: clamp(1.55rem, 2.3vw, 1.875rem);
   --sy-text-title: clamp(1.2rem, 1.6vw, 1.375rem);
@@ -57,9 +73,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-plus-jakarta);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-melodrama: var(--melodrama-family);
+  --font-heading: var(--melodrama-family);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -99,7 +116,7 @@
 }
 
 body {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
   font-size: var(--sy-text-body);
   line-height: var(--sy-leading-body);
   font-feature-settings: "ss01" on, "cv01" on;
@@ -107,13 +124,15 @@ body {
 
 /* Semantic type utilities (landing + dashboards) */
 .sy-type-display {
+  font-family: var(--melodrama-family), ui-serif, serif;
   font-size: var(--sy-text-display);
   line-height: var(--sy-leading-display);
   letter-spacing: var(--sy-tracking-tight);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .sy-type-title-lg {
+  font-family: var(--melodrama-family), ui-serif, serif;
   font-size: var(--sy-text-title-lg);
   line-height: var(--sy-leading-tight);
   letter-spacing: var(--sy-tracking-tight);
@@ -121,27 +140,35 @@ body {
 }
 
 .sy-type-title {
+  font-family: var(--melodrama-family), ui-serif, serif;
   font-size: var(--sy-text-title);
   line-height: var(--sy-leading-snug);
   font-weight: 600;
 }
 
 .sy-type-lead {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
   font-size: var(--sy-text-lead);
   line-height: var(--sy-leading-relaxed);
+  font-weight: 400;
 }
 
 .sy-type-body {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
   font-size: var(--sy-text-body);
   line-height: var(--sy-leading-body);
+  font-weight: 400;
 }
 
 .sy-type-ui {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
   font-size: var(--sy-text-ui);
   line-height: var(--sy-leading-snug);
+  font-weight: 500;
 }
 
 .sy-type-caption {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
   font-size: var(--sy-text-caption);
   line-height: var(--sy-leading-snug);
   letter-spacing: var(--sy-tracking-overline);
@@ -193,6 +220,21 @@ html {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Supply-chain Mapbox layer — attribution + controls match dashboard dark UI */
+.synergy-map .mapboxgl-ctrl-attrib {
+  background: rgba(8, 11, 18, 0.88) !important;
+  border-radius: 10px !important;
+  margin: 8px !important;
+  padding: 5px 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  font-size: 11px !important;
+  color: rgba(196, 208, 228, 0.88) !important;
+}
+
+.synergy-map .mapboxgl-ctrl-attrib a {
+  color: #7dd3fc !important;
 }
 
 @layer base {

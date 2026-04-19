@@ -17,7 +17,7 @@ else:
     from get_data import get_supply_chain_data, get_company_suppliers_slice
 
 app = FastAPI(
-    title="Synergy Supply Chain API",
+    title="GLOBALTRACE Supply Chain API",
     description="Exposes supplier/recursive discovery data as a graph of nodes and edges.",
     version="1.1.0"
 )
@@ -37,7 +37,7 @@ request_cache = PersistentCache(CACHE_PATH)
 
 @app.get("/")
 def read_root():
-    return {"message": "Synergy Supply Chain API is running. Use /company/{name} to explore."}
+    return {"message": "GLOBALTRACE Supply Chain API is running. Use /company/{name} to explore."}
 
 
 @app.get("/test")

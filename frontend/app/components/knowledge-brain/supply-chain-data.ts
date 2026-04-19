@@ -716,9 +716,10 @@ const CYAN = '#00E8FF';
 
 type LayoutSlot = { left: number; right: number };
 
+/** Classic top-down tree: leaf order → horizontal slots, centered under parent. */
 function layoutTreeX(
   rootId: string,
-  children: Map<string, string[]>
+  children: Map<string, string[]>,
 ): Map<string, number> {
   const xCenter = new Map<string, number>();
   let leaf = 0;
