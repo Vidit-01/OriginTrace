@@ -56,10 +56,10 @@ function hashUnit(id: string, salt: string): number {
 function organicOffset(id: string, tier: number): { dx: number; dy: number } {
   const u = hashUnit(id, 'x');
   const v = hashUnit(id, 'y');
-  const wave = Math.sin(tier * 1.17 + u * 6.28) * 14;
+  const wave = Math.sin(tier * 1.17 + u * 6.28) * 22;
   return {
-    dx: (u - 0.5) * 52 + wave,
-    dy: (v - 0.5) * 22 + Math.cos(tier * 0.88) * 8,
+    dx: (u - 0.5) * 82 + wave,
+    dy: (v - 0.5) * 38 + Math.cos(tier * 0.88) * 16,
   };
 }
 
@@ -752,7 +752,7 @@ export function buildSupplyChainGraph(): {
         source: r.parentId,
         target: r.id,
         animated: false,
-        style: { stroke: CYAN, strokeWidth: 1.15, opacity: 0.38 },
+        style: { stroke: CYAN, strokeWidth: 1.9, opacity: 0.55 },
       });
       if (!children.has(r.parentId)) children.set(r.parentId, []);
       children.get(r.parentId)!.push(r.id);
@@ -761,8 +761,9 @@ export function buildSupplyChainGraph(): {
   for (const arr of children.values()) arr.sort((a, b) => a.localeCompare(b));
 
   const xMap = layoutTreeX(rootId, children);
-  const TIER_GAP_Y = 112;
-  const X_SCALE = 82;
+  /** Vertical / horizontal spacing between nodes (reads as stronger “repulsion”). */
+  const TIER_GAP_Y = 168;
+  const X_SCALE = 126;
 
   const nodes: Node<SupplyNodeData>[] = RAW.map((r) => {
     const { id, parentId, ...rest } = r;

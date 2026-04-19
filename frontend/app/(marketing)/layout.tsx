@@ -6,7 +6,7 @@ export const metadata: Metadata = {
     "Reconstruct Tier-N supply networks from open trade data: entity resolution, HSN anchors, recursive graph traversal, and risk-aware visualization.",
 };
 
-export default function LandingLayout({
+export default function MarketingLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -62,6 +62,9 @@ export type KnowledgeNodeData = SupplyNodeData;
 
 const CYAN = '#00E8FF';
 
+/** Zooming out past this clears locked path focus (see onMoveEnd). */
+const PATH_LOCK_CLEAR_ZOOM = 0.32;
+
 const TIER_LABELS: Record<number, string> = {
   0: 'Company (anchor)',
   1: 'Direct suppliers',
@@ -95,50 +98,69 @@ function SidebarItem({
   );
 }
 
-function KnowledgeNode({ data, selected }: NodeProps<KnowledgeFlowNode>) {
+const KnowledgeNode = memo(function KnowledgeNode({
+  data,
+  selected,
+}: NodeProps<KnowledgeFlowNode>) {
   const accent = data.accentColor || CYAN;
   const t = data.tier;
   const size =
-    t === 0 ? 'size-[50px]' : t <= 2 ? 'size-10' : t <= 4 ? 'size-9' : 'size-[30px]';
-  const ring = t === 0 ? 'ring-2 ring-[#00E8FF]/40 ring-offset-2 ring-offset-[#06080c]' : '';
+    t === 0 ? 'size-[58px]' : t <= 2 ? 'size-12' : t <= 4 ? 'size-11' : 'size-[38px]';
+  const ring = t === 0 ? 'ring-2 ring-[#00E8FF]/45 ring-offset-2 ring-offset-[#06080c]' : '';
   const pathGlow = data.pathHighlight;
 
+  const haloOuter =
+    pathGlow ? 0.92 : selected ? 0.52 : 0.34;
+  const haloInner =
+    pathGlow ? 0.72 : selected ? 0.38 : 0.22;
+
   return (
-    <div className="group flex max-w-[168px] flex-col items-center gap-1.5">
+    <div className="group flex max-w-[180px] flex-col items-center gap-1.5">
       <Handle
         type="target"
         position={Position.Top}
         className="!size-2 !border-0 !bg-transparent !opacity-0"
       />
-      <div className="relative flex flex-col items-center">
+      <div className="relative flex flex-col items-center overflow-visible">
+        {/* Wide ambient halo — always visible so tiers read as luminous */}
         <div
-          className={`pointer-events-none absolute inset-0 scale-[1.35] rounded-full blur-xl transition-opacity duration-500 ease-out ${
-            pathGlow ? 'opacity-95' : 'opacity-0 group-hover:opacity-60'
-          } ${selected && !pathGlow ? 'opacity-85' : ''}`}
-          style={{ background: accent }}
+          className="pointer-events-none absolute -inset-8 scale-110 rounded-full blur-3xl transition-opacity duration-300 ease-out motion-safe:group-hover:opacity-90"
+          style={{
+            background: `radial-gradient(circle at 50% 45%, ${accent} 0%, transparent 68%)`,
+            opacity: haloOuter,
+          }}
         />
         <div
-          className={`relative flex ${size} shrink-0 items-center justify-center rounded-full border-[2.5px] bg-gradient-to-b from-[#141820] to-[#0a0c10] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 ease-out ${ring}`}
+          className="pointer-events-none absolute -inset-3 rounded-full blur-2xl transition-opacity duration-300 ease-out motion-safe:group-hover:opacity-80"
           style={{
-            borderColor: pathGlow ? accent : selected ? accent : 'rgba(255,255,255,0.12)',
+            background: accent,
+            opacity: haloInner,
+          }}
+        />
+        <div
+          className={`relative flex ${size} shrink-0 items-center justify-center rounded-full border-[2.5px] bg-gradient-to-b from-[#181d28] to-[#080a0e] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300 ease-out motion-safe:group-hover:scale-[1.03] ${ring}`}
+          style={{
+            borderColor: pathGlow ? accent : selected ? accent : 'rgba(255,255,255,0.16)',
             boxShadow: pathGlow
-              ? `0 0 28px ${accent}88, inset 0 0 18px ${accent}18`
+              ? `0 0 36px ${accent}aa, 0 0 14px ${accent}66, inset 0 0 22px ${accent}22`
               : selected
-                ? `0 0 22px ${accent}55, inset 0 0 14px ${accent}12`
-                : '0 4px 20px rgba(0,0,0,0.45)',
+                ? `0 0 28px ${accent}77, 0 0 10px ${accent}44, inset 0 0 16px ${accent}18`
+                : `0 0 20px ${accent}40, 0 4px 22px rgba(0,0,0,0.55)`,
           }}
         >
           <div
-            className={`rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.85)] ${
-              t === 0 ? 'size-2.5' : t <= 2 ? 'size-2' : 'size-1.5'
+            className={`rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.95)] ${
+              t === 0 ? 'size-3' : t <= 2 ? 'size-2.5' : 'size-2'
             }`}
           />
         </div>
       </div>
-      <span className="line-clamp-2 w-full select-none text-center text-xs font-semibold leading-snug tracking-tight text-white">
+      <span
+        className="line-clamp-2 w-full select-none text-center text-[13px] font-semibold leading-snug tracking-tight text-zinc-50 [text-shadow:0_1px_12px_rgba(0,0,0,0.92),0_0_18px_rgba(0,0,0,0.55)]"
+      >
         {data.label}
       </span>
-      <span className="font-mono text-[10px] leading-none tracking-tight text-zinc-400">
+      <span className="font-mono text-[10px] leading-none tracking-tight text-zinc-300 [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]">
         {data.hsnCode}
       </span>
       <Handle
@@ -148,9 +170,11 @@ function KnowledgeNode({ data, selected }: NodeProps<KnowledgeFlowNode>) {
       />
     </div>
   );
-}
+});
+KnowledgeNode.displayName = 'KnowledgeNode';
 
-const nodeTypes = { knowledge: KnowledgeNode };
+/** Stable map + memo’d component — required so @xyflow’s nodeTypes ref check (dev warn #002) stays quiet. */
+const KNOWLEDGE_NODE_TYPES = Object.freeze({ knowledge: KnowledgeNode });
 
 /** Colored glow on SVG edge paths (tier stroke is hex/rgb). */
 function edgeGlowFilter(color: string): string {
@@ -242,6 +266,8 @@ function BirdsEyesFlow() {
   const [selectedId, setSelectedId] = useState<string | null>(SEED_ROOT_ID);
   const [panelTab, setPanelTab] = useState<'learn' | 'blend' | 'explore'>('learn');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  /** Click-locked path source: keeps highlight after pointer leaves node; cleared on pane / zoom-out / other actions. */
+  const [lockedPathSourceId, setLockedPathSourceId] = useState<string | null>(null);
   const [mainView, setMainView] = useState<'graph' | 'map'>('graph');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -265,6 +291,8 @@ function BirdsEyesFlow() {
       setEdges(newEdges);
       setActiveRootId(newRootId);
       setSelectedId(newRootId);
+      setLockedPathSourceId(null);
+      setHoveredId(null);
       
       // Auto-fit the view after a short delay to allow React Flow to render
       setTimeout(() => {
@@ -278,9 +306,11 @@ function BirdsEyesFlow() {
     }
   };
 
+  const pathHighlightSourceId = lockedPathSourceId ?? hoveredId;
+
   const pathHighlight = useMemo(
-    () => computePathHighlight(hoveredId, activeRootId, edges),
-    [hoveredId, edges, activeRootId]
+    () => computePathHighlight(pathHighlightSourceId, activeRootId, edges),
+    [pathHighlightSourceId, activeRootId, edges]
   );
 
   const selectedNode = useMemo(
@@ -316,6 +346,7 @@ function BirdsEyesFlow() {
   const displayNodes = useMemo(() => {
     const q = query.trim().toLowerCase();
     const glow = pathHighlight?.nodeIds;
+    const focusLock = lockedPathSourceId !== null;
     return nodes.map((n) => {
       const d = n.data;
       const hay = [d.label, d.country, d.hsnCode, d.commodity, d.about, d.parentLabel]
@@ -324,6 +355,11 @@ function BirdsEyesFlow() {
         .toLowerCase();
       const dim = q.length > 0 && !hay.includes(q);
       const pathHighlightOn = !!(glow && glow.has(n.id));
+      const offFocusPath =
+        focusLock && glow && !glow.has(n.id);
+      let opacity = 1;
+      if (dim) opacity = 0.12;
+      else if (offFocusPath) opacity = 0.08;
       const node: KnowledgeFlowNode = {
         ...n,
         type: 'knowledge',
@@ -331,15 +367,15 @@ function BirdsEyesFlow() {
           ...n.data,
           pathHighlight: pathHighlightOn,
         },
-        style: { ...n.style, opacity: dim ? 0.12 : 1 },
+        style: { ...n.style, opacity },
       };
       return node;
     });
-  }, [nodes, query, pathHighlight]);
+  }, [nodes, query, pathHighlight, lockedPathSourceId]);
 
   const displayEdges = useMemo(() => {
     const hi = pathHighlight?.edgeIds;
-    const active = !!hoveredId && hi;
+    const active = !!pathHighlightSourceId && hi;
     return edges.map((e) => {
       const targetTier = tierByNodeId.get(String(e.target)) ?? 0;
       const tierStroke = tierAccent(targetTier);
@@ -351,16 +387,42 @@ function BirdsEyesFlow() {
         style: {
           ...e.style,
           stroke: tierStroke,
-          strokeWidth: highlighted ? 3.15 : dimmed ? 1.1 : 2,
-          opacity: active ? (highlighted ? 1 : 0.14) : 0.62,
+          strokeWidth: highlighted ? 3.35 : dimmed ? 1.25 : 2.15,
+          opacity: active ? (highlighted ? 1 : 0.18) : 0.82,
           filter: dimmed ? undefined : edgeGlowFilter(tierStroke),
         },
       };
     });
-  }, [edges, hoveredId, pathHighlight, tierByNodeId]);
+  }, [edges, pathHighlightSourceId, pathHighlight, tierByNodeId]);
+
+  useEffect(() => {
+    if (mainView !== 'graph') return;
+    let cancelled = false;
+    let attempts = 0;
+    const tryFit = () => {
+      if (cancelled || attempts++ > 40) return;
+      const inst = rfRef.current;
+      if (inst) {
+        inst.fitView({
+          padding: 0.12,
+          duration: 280,
+          minZoom: 0.012,
+          maxZoom: 2.25,
+        });
+        return;
+      }
+      requestAnimationFrame(tryFit);
+    };
+    const t = window.setTimeout(tryFit, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [mainView]);
 
   const focusNeighbor = useCallback(
     (id: string) => {
+      setLockedPathSourceId(id);
       setSelectedId(id);
       setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === id })));
       if (mainView === 'graph') {
@@ -411,6 +473,7 @@ function BirdsEyesFlow() {
             pathHighlight={pathHighlight}
             onHoverNode={setHoveredId}
             onSelectNode={(id) => {
+              setLockedPathSourceId(id);
               setSelectedId(id);
               setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === id })));
             }}
@@ -419,7 +482,14 @@ function BirdsEyesFlow() {
           <ReactFlow<KnowledgeFlowNode, Edge>
             nodes={displayNodes}
             edges={displayEdges}
-            nodeTypes={nodeTypes}
+            nodeTypes={KNOWLEDGE_NODE_TYPES}
+            fitView
+            fitViewOptions={{
+              padding: 0.12,
+              minZoom: 0.012,
+              maxZoom: 2.25,
+              includeHiddenNodes: false,
+            }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodesDraggable={false}
@@ -434,7 +504,19 @@ function BirdsEyesFlow() {
             selectionOnDrag={false}
             onNodeMouseEnter={(_, n) => setHoveredId(n.id)}
             onNodeMouseLeave={() => setHoveredId(null)}
+            onPaneClick={() => {
+              setLockedPathSourceId(null);
+              setHoveredId(null);
+              setSelectedId(null);
+              setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
+            }}
+            onMoveEnd={(_evt, viewport) => {
+              if (viewport.zoom < PATH_LOCK_CLEAR_ZOOM) {
+                setLockedPathSourceId(null);
+              }
+            }}
             onNodeClick={(_, node) => {
+              setLockedPathSourceId(node.id);
               setSelectedId(node.id);
               setNodes((nds) =>
                 nds.map((n) => ({ ...n, selected: n.id === node.id }))
@@ -453,16 +535,29 @@ function BirdsEyesFlow() {
               setSelectedId(sel[0]?.id ?? null);
             }}
             colorMode="dark"
-            minZoom={0.03}
-            maxZoom={1.12}
+            minZoom={0.012}
+            maxZoom={2.25}
             proOptions={{ hideAttribution: true }}
             defaultEdgeOptions={{
               animated: false,
-              style: { strokeWidth: 1.85, opacity: 0.62 },
+              style: { strokeWidth: 2.05, opacity: 0.8 },
             }}
             className="!bg-[#06080c]"
             onInit={(inst) => {
               rfRef.current = inst;
+              const fitAll = () =>
+                inst.fitView({
+                  padding: 0.12,
+                  duration: 0,
+                  minZoom: 0.012,
+                  maxZoom: 2.25,
+                });
+              queueMicrotask(() => {
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(fitAll);
+                });
+              });
+              window.setTimeout(fitAll, 200);
               if (nodes.length > 0) {
                 window.requestAnimationFrame(() =>
                   inst.fitView({
@@ -476,11 +571,11 @@ function BirdsEyesFlow() {
             }}
           >
             <Background
-              color="#2a3140"
-              gap={32}
-              size={1.15}
+              color="#3a4558"
+              gap={28}
+              size={1.2}
               variant={BackgroundVariant.Dots}
-              className="opacity-[0.38]"
+              className="opacity-[0.5]"
             />
           </ReactFlow>
         )}
@@ -563,6 +658,8 @@ function BirdsEyesFlow() {
               type="button"
               onClick={() => {
                 setSelectedId(null);
+                setLockedPathSourceId(null);
+                setHoveredId(null);
                 setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
               }}
               className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-white"
@@ -760,8 +857,9 @@ function BirdsEyesFlow() {
             </div>
             <p className="text-sm font-medium text-zinc-400">Select a node</p>
             <p className="max-w-[280px] text-xs leading-relaxed text-zinc-600">
-              Open trade reconstruction from {activeRootId} — Tier 0 through Tier 6. Hover for upstream /
-              downstream path highlight.
+              Open trade reconstruction from{' '}
+              {nodes.find((n) => n.id === activeRootId)?.data.label ?? ANCHOR_COMPANY_NAME} — Tier 0 through
+              Tier 6. Hover for upstream / downstream path highlight.
             </p>
           </div>
         )}

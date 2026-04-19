@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import DottedMap from "dotted-map";
 
 interface MapProps {
