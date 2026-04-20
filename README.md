@@ -1,3 +1,4 @@
+
 # 🛡️ OriginTrace: Recursive Supply Chain Intelligence
 
 <!-- ![OriginTrace Hero](assets/hero.png) -->
@@ -18,10 +19,7 @@
   Watch the full walkthrough of OriginTrace in action, featuring recursive mapping and risk intelligence analysis.
 </blockquote>
 
-<video controls width="800">
-  <source src="assets/demo.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+<a href="assets/demo.mp4">▶ Watch Demo</a>
 
 <hr>
 
@@ -34,9 +32,9 @@
 
 ### 🛡️ Multi-Factor Risk Intelligence
 OriginTrace calculates a unified **Risk Score** for every node in the graph based on:
-1.  **Sanction Radar (SDN)**: Automatically cross-references companies against international sanction lists (OFAC/SDN) using Gemini's fuzzy name-matching.
-2.  **Financial Health Scanner**: Intelligent analysis of SEC Edgar filings (10-K, 10-Q). Gemini extracts critical financial red flags, debt ratios, and bankruptcy risks directly from regulatory text.
-3.  **Climate Impact Monitor**: Real-time integration with weather APIs to detect active typhoons, storms, or extreme temperatures that could disrupt local logistics.
+1. **Sanction Radar (SDN)**: Automatically cross-references companies against international sanction lists (OFAC/SDN) using Gemini's fuzzy name-matching.
+2. **Financial Health Scanner**: Intelligent analysis of SEC Edgar filings (10-K, 10-Q). Gemini extracts critical financial red flags, debt ratios, and bankruptcy risks directly from regulatory text.
+3. **Climate Impact Monitor**: Real-time integration with weather APIs to detect active typhoons, storms, or extreme temperatures that could disrupt local logistics.
 
 ### 🧠 Intelligent Data Engine
 - **Hybrid Extraction**: Combines high-resolution scraping (ImportYeti) with Gemini 2.0 Flash to parse unstructured shipment data into structured graph entities.
@@ -48,18 +46,18 @@ OriginTrace calculates a unified **Risk Score** for every node in the graph base
 
 ## 🛠️ Technical Architecture
 
-### **Backend**
+### Backend
 - **Framework**: FastAPI (Python)
 - **AI Core**: Google Gemini API (2.0 Flash)
 - **Automation**: Playwright for headless browser interaction
-- **Data sources**: 
-    - SEC Edgar (Financials)
-    - ImportYeti (Shipments)
-    - Open-source SDN Lists (Sanctions)
-    - WeatherAPI (Logistical Risk)
+- **Data Sources**:
+  - SEC Edgar (Financials)
+  - ImportYeti (Shipments)
+  - Open-source SDN Lists (Sanctions)
+  - WeatherAPI (Logistical Risk)
 - **Storage**: JSON Graph Store with Persistent Cache
 
-### **Frontend**
+### Frontend
 - **Framework**: Next.js 15+ (App Router)
 - **Styling**: Tailwind CSS & Lucide Icons
 - **Visuals**: Framer Motion for smooth transitions
@@ -79,9 +77,10 @@ OriginTrace calculates a unified **Risk Score** for every node in the graph base
 ```bash
 git clone https://github.com/your-username/OriginTrace.git
 cd OriginTrace
-```
+````
 
 ### 2. Backend Setup
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -89,13 +88,36 @@ python main.py
 ```
 
 ### 3. Frontend Setup
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
+### 4. Environment Variables Setup
+
+Both backend and frontend rely on environment variables.
+
+1. Copy the example file:
+
+```bash
+cp .env.example .env
+```
+
+2. Update `.env`:
+
+
+3. Restart backend and frontend after changes.
+
 ---
 
-## 🤝 Team Syn3rgy
-Developed for the **LetUsCook.exe** Hackathon.
+## 👥 Team LetUsCook.exe
+
+- [Anay Shah](https://github.com/Anayshah13)
+- [Jai Udeshi](https://github.com/jaiudeshi05)
+- [Keya Divecha](https://github.com/k-div-11)
+- [Vidit Gupta](https://github.com/Vidit-01)
+
+---
+
